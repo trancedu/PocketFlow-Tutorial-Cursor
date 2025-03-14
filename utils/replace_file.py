@@ -16,11 +16,6 @@ def replace_file(target_file: str, start_line: int, end_line: int, content: str)
     Returns:
         Tuple of (result message, success status)
     """
-    
-    input(f"""Replacing lines {start_line} to {end_line} in {target_file} with content:
-    {content}
-    Press Enter to continue...
-    """)
 
     try:
         # Check if file exists
