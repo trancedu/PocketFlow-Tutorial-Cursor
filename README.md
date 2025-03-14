@@ -22,7 +22,7 @@ Cursor is cool! But what if we use it to build an open-source, customizable AI c
 
 - I built using **Agentic Coding**, the fastest development paradigm, where humans simply [design](docs/design.md) and agents [code](flow.py).
 
-- The secret weapon is [Pocket Flow](https://github.com/The-Pocket/PocketFlow), a 100-line LLM framework that lets LLM Agents (e.g., Cursor AI) build Apps for you
+- The secret weapon is [Pocket Flow](https://github.com/The-Pocket/PocketFlow), a 100-line LLM framework that lets Agents (e.g., Cursor AI) build for you
   
 - Step-by-step YouTube development tutorial coming soon! [Subscribe for notifications](https://www.youtube.com/@ZacharyLLM?sub_confirmation=1).
 
