@@ -26,6 +26,8 @@ Cursor is cool! But what if we use it to build an open-source, customizable AI c
   
 - Step-by-step YouTube development tutorial coming soon! [Subscribe for notifications](https://www.youtube.com/@ZacharyLLM?sub_confirmation=1).
 
+- Check out the [Blog Post](https://zacharyhuang.substack.com/p/building-cursor-with-cursor-a-step) for more!
+
 ## Examples
 
 We provide an example `project` of SaaS product homepage for the code agent to edit.
