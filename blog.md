@@ -566,9 +566,6 @@ prompt += f"\n\nLANGUAGE HINT: {language_hint}"
 To give your agent more context, you could add a vector database to store and retrieve relevant information:
 
 ```python
-from langchain.vectorstores import Chroma
-from langchain.embeddings import OpenAIEmbeddings
-
 class VectorDBNode(Node):
     def prep(self, shared):
         # Get text to store
