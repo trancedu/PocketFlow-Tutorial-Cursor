@@ -194,7 +194,9 @@ Available tools:
 Respond with a YAML object containing:
 ```yaml
 tool: one of: read_file, edit_file, delete_file, grep_search, list_dir, finish
-reason: detailed explanation of why you chose this tool and what you intend to do
+reason: |
+  detailed explanation of why you chose this tool and what you intend to do
+  if you chose finish, explain why no more actions are needed
 params:
   # parameters specific to the chosen tool
 ```
