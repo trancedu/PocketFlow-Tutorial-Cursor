@@ -259,7 +259,6 @@ shared = {
     - Return user query and relevant history
   - **exec**:
     - Call LLM to decide which tool to use and prepare parameters
-    - If `list_dir` is needed, prepare to handle the tree visualization result format
     - Return tool name, reason for using it, and parameters
   - **post**:
     - Add new action to `shared["history"]` with tool, reason, and parameters

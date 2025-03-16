@@ -3,9 +3,11 @@
 Cursor is cool! But what if we use it to build an open-source, customizable AI coding agent? We’ll develop a “Cursor Agent” that writes, reviews, and refactors code—right within Cursor itself. It’s meta, it’s moddable, and it’s powered by the power of Cursor. Let’s build Cursor…with Cursor.
 
 <p align="center">
-  <img 
-    src="./assets/banner.png" width="600"
-  />
+  <a href="https://youtu.be/HH7TZFgoqEQ" target="_blank">
+    <img 
+      src="./assets/banner.png" width="600"
+    />
+  </a>
 </p>
 
 - To install: 
@@ -26,7 +28,16 @@ Cursor is cool! But what if we use it to build an open-source, customizable AI c
 
 - The secret weapon is [Pocket Flow](https://github.com/The-Pocket/PocketFlow), a 100-line LLM framework that lets Agents (e.g., Cursor AI) build for you
   
-- Step-by-step YouTube development tutorial coming soon! [Subscribe for notifications](https://www.youtube.com/@ZacharyLLM?sub_confirmation=1).
+- Step-by-step YouTube development tutorial:
+
+  <br>
+  <div align="center">
+    <a href="https://youtu.be/HH7TZFgoqEQ" target="_blank">
+      <img src="./assets/tutorial.png" width="500" alt="IMAGE ALT TEXT" style="cursor: pointer;">
+    </a>
+  </div>
+  <br>
+
 
 - Check out the [Blog Post](https://zacharyhuang.substack.com/p/building-cursor-with-cursor-a-step) for more!
 
