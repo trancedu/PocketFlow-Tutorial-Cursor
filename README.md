@@ -22,7 +22,7 @@ Cursor is cool! But what if we use it to build an open-source, customizable AI c
 
 - **How does it work?** The best starting point to learn is the [design doc](docs/design.md) and the [flow code](flow.py).
 
-- **Note**: This project hasn't been pressure-tested or optimized. We intentionally keep it simple for learning and customization.
+- **Note**: This project hasn't been pressure-tested or optimized. We intentionally keep it simple for learning.
 
 ## I built this Cursor Agent using Cursor itself! 
 
