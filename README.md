@@ -37,6 +37,7 @@ We provide an example `project` of SaaS product homepage for the code agent to e
 To run the page:
 
 ```
+cd project
 npm install
 npm run dev
 ```
