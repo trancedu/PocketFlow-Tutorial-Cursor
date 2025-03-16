@@ -40,9 +40,6 @@ Cursor is cool! But what if we use it to build an open-source, customizable AI c
   </div>
   <br>
 
-
-- Check out the [Blog Post](https://zacharyhuang.substack.com/p/building-cursor-with-cursor-a-step) for more!
-
 ## Examples
 
 We provide an example `project` of SaaS product homepage for the code agent to edit.
