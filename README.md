@@ -24,7 +24,7 @@ Cursor is cool! But what if we use it to build an open-source, customizable AI c
 
 - **Note**: This project hasn't been pressure-tested or optimized. We intentionally keep it simple for learning and customization.
 
-## I built this in just an hour, and you can, too.
+## I built this in just 1 day, and you can, too.
 
 - I built using [**Agentic Coding**](https://the-pocket.github.io/PocketFlow/guide.html), the fastest development paradigm, where humans simply [design](docs/design.md) and agents [code](flow.py).
 
