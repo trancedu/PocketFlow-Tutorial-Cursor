@@ -42,5 +42,6 @@ npm run dev
 ```
 
 Here are some example queries you can try:
-- "For Trusted by industry leaders, add two more boxes."
-- "Please move the image near the title "Streamline Your Business Operations" below the title rather than next to it."
+```bash
+python main.py --query "For Trusted by industry leaders, add two more boxes." --working-dir ./project
+```
