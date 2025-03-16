@@ -18,6 +18,8 @@ Cursor is cool! But what if we use it to build an open-source, customizable AI c
   python main.py --query "List all Python files" --working-dir ./project
   ```
 
+- **Note**: This project hasn't been pressure-tested or optimized. We intentionally keep it simple for learning and customization.
+
 ## Development Tutorial
 
 - I built using **Agentic Coding**, the fastest development paradigm, where humans simply [design](docs/design.md) and agents [code](flow.py).
