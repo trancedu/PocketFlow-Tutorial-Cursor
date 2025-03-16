@@ -20,7 +20,7 @@ Cursor is cool! But what if we use it to build an open-source, customizable AI c
   python main.py --query "List all Python files" --working-dir ./project
   ```
 
-- **How does it work?** check out [design doc](docs/design.md) and [flow code](flow.py).
+- **How does it work?** The best starting point to learn is the [design doc](docs/design.md) and the [flow code](flow.py).
 
 - **Note**: This project hasn't been pressure-tested or optimized. We intentionally keep it simple for learning and customization.
 
