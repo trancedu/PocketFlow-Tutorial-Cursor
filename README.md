@@ -17,7 +17,7 @@ Cursor is cool! But what if we use it to build an open-source, customizable AI c
 
 - To run the Agent
   ```bash
-  python main.py --query "List all Python files" --working-dir ./project
+  python main.py --query "For Trusted by industry leaders, add two more boxes." --working-dir ./project
   ```
 
 - **How does it work?** The best starting point to learn is the [design doc](docs/design.md) and the [flow code](flow.py).
