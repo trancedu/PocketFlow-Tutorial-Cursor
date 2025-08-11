@@ -193,13 +193,13 @@ Available tools:
 
 Respond with a JSON object containing:
 ```json
-{
+{{
   "tool": "one of: read_file, edit_file, delete_file, grep_search, list_dir, finish",
   "reason": "detailed explanation of why you chose this tool and what you intend to do. If you chose finish, explain why no more actions are needed",
-  "params": {
-    // parameters specific to the chosen tool
-  }
-}
+  "params": {{
+    "parameter_name": "parameter_value"
+  }}
+}}
 ```
 
 IMPORTANT: Ensure proper JSON indentation in your response. When including code examples in the reason field, maintain correct indentation within the JSON string.
@@ -210,27 +210,23 @@ If you believe no more actions are needed, use "finish" as the tool and explain 
         # Call LLM to decide action
         response = call_llm(prompt)
 
-        # Look for YAML structure in the response
-        yaml_content = ""
-        if "```yaml" in response:
-            yaml_blocks = response.split("```yaml")
-            if len(yaml_blocks) > 1:
-                yaml_content = yaml_blocks[1].split("```")[0].strip()
-        elif "```yml" in response:
-            yaml_blocks = response.split("```yml")
-            if len(yaml_blocks) > 1:
-                yaml_content = yaml_blocks[1].split("```")[0].strip()
+        # Look for JSON structure in the response
+        json_content = ""
+        if "```json" in response:
+            json_blocks = response.split("```json")
+            if len(json_blocks) > 1:
+                json_content = json_blocks[1].split("```")[0].strip()
         elif "```" in response:
             # Try to extract from generic code block
-            yaml_blocks = response.split("```")
-            if len(yaml_blocks) > 1:
-                yaml_content = yaml_blocks[1].strip()
+            json_blocks = response.split("```")
+            if len(json_blocks) > 1:
+                json_content = json_blocks[1].strip()
         else:
             # If no code blocks, try to use the entire response
-            yaml_content = response.strip()
+            json_content = response.strip()
         
-        if yaml_content:
-            decision = yaml.safe_load(yaml_content)
+        if json_content:
+            decision = json.loads(json_content)
             
             # Validate the required fields
             assert "tool" in decision, "Tool name is missing"
@@ -535,21 +531,21 @@ If you want APPEND, just copy that line as the first line of the replacement.
 Return a JSON object with your reasoning and an array of edit operations:
 
 ```json
-{
+{{
   "reasoning": "First explain your thinking process about how you're interpreting the edit pattern. Explain how you identified where the edits should be made in the original file. Describe any assumptions or decisions you made when determining the edit locations. You need to be very precise with the start and end lines! Reason why not 1 line before or after the start and end lines.",
   "operations": [
-    {
+    {{
       "start_line": 10,
       "end_line": 15,
       "replacement": "def process_file(filename):\\n    # New implementation with better error handling\\n    try:\\n        with open(filename, 'r') as f:\\n            return f.read()\\n    except FileNotFoundError:\\n        return None"
-    },
-    {
+    }},
+    {{
       "start_line": 25,
       "end_line": 25,
       "replacement": "logger.info(\\"File processing completed\\")"
-    }
+    }}
   ]
-}
+}}
 ```
 
 IMPORTANT: Ensure proper JSON formatting with correct escaping of quotes and newlines. Use \\n for newlines and \\" for quotes within strings. Maintain proper indentation in the replacement code by including the appropriate spaces and tabs in the replacement string.
