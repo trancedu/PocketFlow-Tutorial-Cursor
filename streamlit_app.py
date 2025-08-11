@@ -5,6 +5,7 @@ import threading
 import queue
 import time
 import io
+import json
 from typing import Dict, Any, List
 from datetime import datetime
 
@@ -109,8 +110,8 @@ def main():
         initial_sidebar_state="expanded"
     )
     
-    st.title("🤖 AI Coding Agent")
-    st.markdown("*AI-powered coding assistant with real-time logging*")
+    st.title("🤖 AI Coding Agent - Chat Interface")
+    st.markdown("*AI-powered coding assistant with persistent conversation memory*")
     
     # Sidebar for configuration
     with st.sidebar:
@@ -126,7 +127,7 @@ def main():
         
         # Validate directory
         if working_dir and os.path.exists(working_dir):
-            st.success(f"✅ Directory exists: `{working_dir}`")
+            st.success(f"✅ Directory exists")
             
             # Show directory contents
             try:
@@ -144,44 +145,41 @@ def main():
         elif working_dir:
             st.error(f"❌ Directory not found: `{working_dir}`")
         
-        # Conversation history section
+        st.divider()
+        
+        # Chat controls
+        st.header("💬 Chat Controls")
+        
+        # New chat button
+        if st.button("🆕 New Chat", type="primary", use_container_width=True, help="Start a new conversation and clear history"):
+            st.session_state.conversation_history = []
+            st.session_state.logs = []
+            st.session_state.response = None
+            st.session_state.error = None
+            st.session_state.processing = False
+            st.rerun()
+        
+        # Show conversation stats
         if 'conversation_history' in st.session_state and st.session_state.conversation_history:
-            st.divider()
-            st.header("💭 Conversation History")
+            st.write(f"📊 **Current Chat:**")
+            st.write(f"• {len(st.session_state.conversation_history)} exchanges")
+            st.write(f"• Started: {st.session_state.conversation_history[0]['timestamp'][:19]}")
             
-            # Clear history button
-            if st.button("🗑️ Clear History", help="Clear all conversation history"):
-                st.session_state.conversation_history = []
-                st.rerun()
-            
-            # Show conversation history
-            with st.expander(f"📚 Previous Conversations ({len(st.session_state.conversation_history)})", expanded=False):
-                for i, conv in enumerate(reversed(st.session_state.conversation_history[-5:])):  # Show last 5
-                    st.write(f"**Q{len(st.session_state.conversation_history)-i}:** {conv['user_query'][:100]}{'...' if len(conv['user_query']) > 100 else ''}")
-                    st.write(f"**A:** {conv['response'][:150]}{'...' if len(conv['response']) > 150 else ''}")
-                    st.write(f"*{conv['actions_taken']} actions - {conv['timestamp'][:19]}*")
-                    st.divider()
+            # Export chat option
+            if st.button("💾 Export Chat", help="Download chat history as JSON"):
+                chat_export = {
+                    "working_directory": working_dir,
+                    "chat_history": st.session_state.conversation_history,
+                    "exported_at": datetime.now().isoformat()
+                }
+                st.download_button(
+                    "📥 Download Chat History",
+                    data=json.dumps(chat_export, indent=2),
+                    file_name=f"ai_chat_history_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                    mime="application/json"
+                )
     
-    # Main interface
-    col1, col2 = st.columns([1, 1])
-    
-    with col1:
-        st.header("💬 Your Request")
-        
-        # Query input
-        user_query = st.text_area(
-            "What would you like me to help you with?",
-            placeholder="e.g., 'Find all TODO comments in Python files', 'Add error handling to main.py', 'Show me the project structure'",
-            height=100
-        )
-        
-        # Submit button
-        submit_button = st.button("🚀 Run Agent", type="primary", use_container_width=True)
-    
-    with col2:
-        st.header("📊 Agent Status")
-    
-    # Initialize session state (moved outside columns)
+    # Initialize session state
     if 'processing' not in st.session_state:
         st.session_state.processing = False
     if 'logs' not in st.session_state:
@@ -192,155 +190,210 @@ def main():
         st.session_state.error = None
     if 'conversation_history' not in st.session_state:
         st.session_state.conversation_history = []
+    if 'current_query' not in st.session_state:
+        st.session_state.current_query = ""
+    
+    # Main chat interface
+    st.header("💬 Conversation")
+    
+    # Display conversation history
+    if st.session_state.conversation_history:
+        for i, exchange in enumerate(st.session_state.conversation_history):
+            # User message
+            with st.container():
+                st.markdown(f"**🙋 You:** {exchange['user_query']}")
+                
+                # AI response  
+                with st.container():
+                    st.markdown(f"**🤖 Assistant:**")
+                    # Parse and display response nicely
+                    response_text = exchange['response']
+                    
+                    if "```" in response_text:
+                        parts = response_text.split("```")
+                        for j, part in enumerate(parts):
+                            if j % 2 == 0:  # Regular text
+                                if part.strip():
+                                    st.markdown(part.strip())
+                            else:  # Code block
+                                # Try to detect language
+                                lines = part.strip().split('\n')
+                                if lines and not lines[0].strip().startswith('{'):
+                                    # First line might be language
+                                    lang = lines[0].strip()
+                                    code = '\n'.join(lines[1:])
+                                    st.code(code, language=lang if lang in ['python', 'json', 'bash', 'javascript'] else 'text')
+                                else:
+                                    st.code(part.strip())
+                    else:
+                        st.markdown(response_text)
+                
+                # Metadata
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.caption(f"⏰ {exchange['timestamp'][:19]} • 🔧 {exchange['actions_taken']} actions")
+                with col2:
+                    if st.button("🗑️", key=f"delete_{i}", help="Remove this exchange"):
+                        st.session_state.conversation_history.pop(i)
+                        st.rerun()
+                
+                st.divider()
+    else:
+        st.info("👋 Welcome! Ask me anything about your codebase. I can read files, search code, make edits, and more!")
+    
+    # Current processing status
+    if st.session_state.processing:
+        st.container(border=True).info("🤔 AI is thinking... Please wait.")
+    
+    # Input area - only show when NOT processing
+    if not st.session_state.processing:
+        with st.container():
+            st.markdown("### 💭 Ask the AI Assistant")
+            
+            # Query input - controlled by session state
+            user_query = st.text_area(
+                "What would you like me to help you with?",
+                placeholder="e.g., 'Find all TODO comments in Python files', 'Add error handling to main.py', 'Show me the project structure'",
+                height=80,
+                key="user_input",
+                value=""  # Always start with empty value
+            )
+            
+            # Submit button
+            col1, col2 = st.columns([3, 1])
+            with col2:
+                submit_button = st.button(
+                    "🚀 Send", 
+                    type="primary", 
+                    use_container_width=True,
+                    disabled=not user_query.strip()
+                )
+            with col1:
+                if not working_dir or not os.path.exists(working_dir):
+                    st.error("❌ Please specify a valid working directory in the sidebar")
+                elif not user_query.strip():
+                    st.caption("💡 Enter your question above and click Send")
+    else:
+        # Define variables for processing section
+        user_query = ""
+        submit_button = False
     
     # Process request
     if submit_button and user_query.strip():
         if not working_dir or not os.path.exists(working_dir):
-            st.error("❌ Please specify a valid working directory")
-            return
+            st.error("❌ Please specify a valid working directory in the sidebar")
+            st.stop()
             
-        # Reset state
+        # Store the query and start processing
+        st.session_state.current_query = user_query.strip()
         st.session_state.processing = True
         st.session_state.logs = []
         st.session_state.response = None
-        
-        # Create shared data
+        st.session_state.error = None
+        st.rerun()
+    
+    # Show processing interface if currently processing
+    if st.session_state.processing:
+        # Create shared data for the current processing
         shared_data = {
-            "user_query": user_query.strip(),
+            "user_query": st.session_state.current_query,
             "working_dir": working_dir,
             "history": [],
-            "conversation_history": st.session_state.conversation_history,  # Pass conversation history
+            "conversation_history": st.session_state.conversation_history,
             "response": None,
             "error": None
         }
         
-        # Create log queue and start processing
+        # Create log queue and start processing  
         log_queue = queue.Queue()
         
         # Start agent in separate thread
         agent_thread = threading.Thread(
-            target=run_agent_flow, 
+            target=run_agent_flow,
             args=(shared_data, log_queue),
             daemon=True
         )
         agent_thread.start()
         
-        # Real-time log display
-        log_container = st.container()
-        status_placeholder = st.empty()
-        
-        with log_container:
-            st.subheader("📝 Live Logs")
+        # Show processing logs in an expander
+        with st.expander("📝 Processing Logs", expanded=True):
             log_placeholder = st.empty()
-        
-        # Monitor logs and thread
-        start_time = time.time()
-        max_wait_time = 120  # 2 minutes timeout
-        
-        while agent_thread.is_alive() or not log_queue.empty():
-            # Check timeout
-            if time.time() - start_time > max_wait_time:
-                st.error("⏰ Process timed out after 2 minutes")
-                break
+            status_placeholder = st.empty()
             
-            # Get new log entries
-            new_logs = []
-            try:
-                while True:
-                    log_entry = log_queue.get_nowait()
-                    new_logs.append(log_entry)
-                    st.session_state.logs.append(log_entry)
-            except queue.Empty:
-                pass
+            # Monitor logs and thread
+            start_time = time.time()
+            max_wait_time = 120  # 2 minutes timeout
             
-            # Update log display
-            if st.session_state.logs:
-                with log_placeholder.container():
-                    # Show recent logs in a code block
-                    recent_logs = st.session_state.logs[-20:]  # Show last 20 entries
-                    log_text = "\n".join(recent_logs)
-                    st.code(log_text, language="text")
-            
-            # Update status
-            if agent_thread.is_alive():
-                status_placeholder.info(f"🔄 Processing... ({len(st.session_state.logs)} log entries)")
-            else:
-                status_placeholder.success(f"✅ Processing complete! ({len(st.session_state.logs)} log entries)")
-            
-            time.sleep(0.5)  # Update every 500ms
-        
-        # Wait a bit more to ensure thread completion and response is set
-        if not agent_thread.is_alive():
-            time.sleep(0.5)  # Give thread time to finish cleanup
-            
-        # Get final response with retry logic
-        max_response_retries = 5
-        response_retry_count = 0
-        final_response = None
-        while response_retry_count < max_response_retries:
-            final_response = shared_data.get("response")
-            if final_response:
-                break
-            time.sleep(0.2)
-            response_retry_count += 1
-        
-        # Set final response and error
-        st.session_state.response = final_response or shared_data.get("response")
-        st.session_state.error = shared_data.get("error")
-        st.session_state.processing = False
-        
-        # Debug information
-        if not st.session_state.response and not st.session_state.error:
-            st.warning(f"⚠️ No response received after {response_retry_count} retries. Check logs for details.")
-        
-        # Add to conversation history if we got a response
-        if st.session_state.response:
-            st.session_state.conversation_history.append({
-                "user_query": user_query.strip(),
-                "response": st.session_state.response,
-                "timestamp": datetime.now().isoformat(),
-                "actions_taken": len(shared_data.get("history", []))
-            })
-    
-    # Display results
-    if st.session_state.response or st.session_state.error:
-        st.header("📋 Response")
-        
-        if st.session_state.error:
-            st.error(f"❌ Error: {st.session_state.error}")
-        elif st.session_state.response:
-            # Display response in a nice format
-            with st.container():
-                st.markdown("### 🎯 Agent Response")
+            while agent_thread.is_alive() or not log_queue.empty():
+                # Check timeout
+                if time.time() - start_time > max_wait_time:
+                    st.error("⏰ Process timed out after 2 minutes")
+                    break
                 
-                # Parse and display response nicely
-                response_text = st.session_state.response
+                # Get new log entries
+                new_logs = []
+                try:
+                    while True:
+                        log_entry = log_queue.get_nowait()
+                        new_logs.append(log_entry)
+                        st.session_state.logs.append(log_entry)
+                except queue.Empty:
+                    pass
                 
-                # Check if response contains code blocks
-                if "```" in response_text:
-                    parts = response_text.split("```")
-                    for i, part in enumerate(parts):
-                        if i % 2 == 0:  # Regular text
-                            if part.strip():
-                                st.markdown(part.strip())
-                        else:  # Code block
-                            # Try to detect language
-                            lines = part.strip().split('\n')
-                            if lines and not lines[0].strip().startswith('{'):
-                                # First line might be language
-                                lang = lines[0].strip()
-                                code = '\n'.join(lines[1:])
-                                st.code(code, language=lang if lang in ['python', 'json', 'bash', 'javascript'] else 'text')
-                            else:
-                                st.code(part.strip())
+                # Update log display
+                if st.session_state.logs:
+                    with log_placeholder.container():
+                        # Show recent logs in a code block
+                        recent_logs = st.session_state.logs[-15:]  # Show last 15 entries
+                        log_text = "\n".join(recent_logs)
+                        st.code(log_text, language="text")
+                
+                # Update status
+                if agent_thread.is_alive():
+                    status_placeholder.info(f"🔄 Processing... ({len(st.session_state.logs)} log entries)")
                 else:
-                    st.markdown(response_text)
+                    status_placeholder.success(f"✅ Processing complete!")
+                
+                time.sleep(0.5)  # Update every 500ms
+            
+            # Wait for thread completion and get response
+            if not agent_thread.is_alive():
+                time.sleep(0.5)  # Give thread time to finish cleanup
+                
+            # Get final response with retry logic
+            max_response_retries = 5
+            response_retry_count = 0
+            final_response = None
+            while response_retry_count < max_response_retries:
+                final_response = shared_data.get("response")
+                if final_response:
+                    break
+                time.sleep(0.2)
+                response_retry_count += 1
+            
+            # Set final response and error
+            st.session_state.response = final_response or shared_data.get("response")
+            st.session_state.error = shared_data.get("error")
+            st.session_state.processing = False
+            
+            # Add to conversation history if we got a response
+            if st.session_state.response:
+                st.session_state.conversation_history.append({
+                    "user_query": shared_data["user_query"],
+                    "response": st.session_state.response,
+                    "timestamp": datetime.now().isoformat(),
+                    "actions_taken": len(shared_data.get("history", []))
+                })
+            
+            # Clear the current query to reset input box
+            st.session_state.current_query = ""
+            
+            # Rerun to show the updated conversation
+            st.rerun()
     
-    # Show logs below response
+    # Show detailed logs if available
     if st.session_state.logs and not st.session_state.processing:
-        st.header("📜 Complete Logs")
-        
-        with st.expander("View All Logs", expanded=False):
+        with st.expander("📜 View Processing Logs", expanded=False):
             # Option to download logs
             log_text = "\n".join(st.session_state.logs)
             st.download_button(
