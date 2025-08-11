@@ -3,15 +3,31 @@ import argparse
 import logging
 from flow import coding_agent_flow
 
-# Set up logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('coding_agent.log')
-    ]
-)
+# Set up logging with separate console and file handlers
+logger_root = logging.getLogger()
+logger_root.setLevel(logging.DEBUG)  # Allow all levels
+
+# Clear any existing handlers to avoid duplicates
+logger_root.handlers.clear()
+
+# Console handler - show INFO and above
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+
+# File handler - save DEBUG and above  
+file_handler = logging.FileHandler('coding_agent.log')
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+
+# Add handlers to root logger
+logger_root.addHandler(console_handler)
+logger_root.addHandler(file_handler)
+
+# Suppress debug messages from third-party libraries
+logging.getLogger("anthropic").setLevel(logging.INFO)
+logging.getLogger("httpcore").setLevel(logging.INFO)
+logging.getLogger("httpx").setLevel(logging.INFO)
 
 logger = logging.getLogger('main')
 

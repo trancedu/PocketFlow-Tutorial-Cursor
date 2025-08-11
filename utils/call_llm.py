@@ -16,6 +16,7 @@ log_file = os.path.join(log_directory, f"llm_calls_{datetime.now().strftime('%Y%
 # Set up logger
 logger = logging.getLogger("llm_logger")
 logger.setLevel(logging.DEBUG)  # Allow all levels
+logger.propagate = False  # Prevent propagation to root logger to avoid duplicates
 
 # Console handler - show INFO and above
 console_handler = logging.StreamHandler()
