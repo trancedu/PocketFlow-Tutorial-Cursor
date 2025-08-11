@@ -38,10 +38,24 @@ def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description='Coding Agent - AI-powered coding assistant')
     parser.add_argument('--query', '-q', type=str, help='User query to process', required=False)
-    parser.add_argument('--working-dir', '-d', type=str, default=os.path.join(os.getcwd(), "project"), 
+    parser.add_argument('--working-dir', '-d', type=str, default=os.getcwd(), 
                         help='Working directory for file operations (default: current directory)')
+    parser.add_argument('--cli', action='store_true', help='Use command-line interface instead of Streamlit')
     args = parser.parse_args()
     
+    # Default to Streamlit interface unless --cli is specified
+    if not args.cli:
+        import subprocess
+        import sys
+        print("🚀 Starting Streamlit interface...")
+        print("💡 Use --cli flag to use command-line interface instead")
+        try:
+            subprocess.run([sys.executable, "-m", "streamlit", "run", "streamlit_app.py"])
+        except KeyboardInterrupt:
+            print("\n👋 Streamlit interface closed")
+        return
+    
+    # CLI mode - existing functionality
     # If no query provided via command line, ask for it
     user_query = args.query
     if not user_query:
