@@ -157,6 +157,7 @@ def main():
             st.session_state.response = None
             st.session_state.error = None
             st.session_state.processing = False
+            st.session_state.input_key_counter += 1  # Force new input widget
             st.rerun()
         
         # Show conversation stats
@@ -192,6 +193,8 @@ def main():
         st.session_state.conversation_history = []
     if 'current_query' not in st.session_state:
         st.session_state.current_query = ""
+    if 'input_key_counter' not in st.session_state:
+        st.session_state.input_key_counter = 0
     
     # Main chat interface
     st.header("💬 Conversation")
@@ -247,32 +250,34 @@ def main():
     
     # Input area - only show when NOT processing
     if not st.session_state.processing:
-        with st.container():
+        # Use a form to enable proper keyboard shortcuts
+        with st.form(key=f"chat_form_{st.session_state.input_key_counter}", clear_on_submit=True):
             st.markdown("### 💭 Ask the AI Assistant")
             
-            # Query input - controlled by session state
+            # Query input with dynamic key to force refresh
             user_query = st.text_area(
                 "What would you like me to help you with?",
                 placeholder="e.g., 'Find all TODO comments in Python files', 'Add error handling to main.py', 'Show me the project structure'",
+                help="💡 Tip: Use Cmd+Enter (Mac) or Ctrl+Enter (PC) to submit",
                 height=80,
-                key="user_input",
-                value=""  # Always start with empty value
+                key=f"query_input_{st.session_state.input_key_counter}"  # Dynamic key
             )
             
             # Submit button
             col1, col2 = st.columns([3, 1])
             with col2:
-                submit_button = st.button(
+                submit_button = st.form_submit_button(
                     "🚀 Send", 
                     type="primary", 
-                    use_container_width=True,
-                    disabled=not user_query.strip()
+                    use_container_width=True
                 )
             with col1:
                 if not working_dir or not os.path.exists(working_dir):
                     st.error("❌ Please specify a valid working directory in the sidebar")
                 elif not user_query.strip():
-                    st.caption("💡 Enter your question above and click Send")
+                    st.caption("💡 Enter your question above and click Send or press Cmd/Ctrl+Enter")
+                else:
+                    st.caption("💡 Press Cmd+Enter (Mac) or Ctrl+Enter (PC) to send")
     else:
         # Define variables for processing section
         user_query = ""
@@ -387,6 +392,8 @@ def main():
             
             # Clear the current query to reset input box
             st.session_state.current_query = ""
+            # Increment input key counter to force new text area widget
+            st.session_state.input_key_counter += 1
             
             # Rerun to show the updated conversation
             st.rerun()
