@@ -24,7 +24,7 @@ logger.addHandler(file_handler)
 cache_file = "llm_cache.json"
 
 # Learn more about calling the LLM: https://the-pocket.github.io/PocketFlow/utility_function/llm.html
-def call_llm(prompt: str, use_cache: bool = True) -> str:
+def call_llm(prompt: str, use_cache: bool = True, use_thinking: bool = True) -> str:
     # Log the prompt
     logger.info(f"PROMPT: {prompt}")
     
@@ -48,16 +48,27 @@ def call_llm(prompt: str, use_cache: bool = True) -> str:
     client = Anthropic(
         api_key=os.getenv("CLAUDE_API_KEY")
     )
-    response = client.messages.create(
-        max_tokens=20000,
-        thinking={
+    # Prepare message parameters
+    message_params = {
+        "max_tokens": 20000,
+        "messages": [{"role": "user", "content": prompt}],
+        "model": "claude-sonnet-4-20250514"
+    }
+    
+    # Add thinking if enabled
+    if use_thinking:
+        message_params["thinking"] = {
             "type": "enabled",
             "budget_tokens": 16000
-        },
-        messages=[{"role": "user", "content": prompt}],
-        model="claude-3-7-sonnet@20250219"
-    )
-    response_text = response.content[1].text
+        }
+    
+    response = client.messages.create(**message_params)
+    
+    # Extract response text based on whether thinking is enabled
+    if use_thinking:
+        response_text = response.content[1].text  # With thinking, response is at index 1
+    else:
+        response_text = response.content[0].text  # Without thinking, response is at index 0
     
     # Log the response
     logger.info(f"RESPONSE: {response_text}")
@@ -93,12 +104,17 @@ def clear_cache() -> None:
 if __name__ == "__main__":
     test_prompt = "Hello, how are you?"
     
-    # First call - should hit the API
-    print("Making first call...")
-    response1 = call_llm(test_prompt, use_cache=False)
+    # First call - should hit the API with thinking enabled
+    print("Making first call with thinking...")
+    response1 = call_llm(test_prompt, use_cache=False, use_thinking=True)
     print(f"Response: {response1}")
     
-    # Second call - should hit cache
-    print("\nMaking second call with same prompt...")
-    response2 = call_llm(test_prompt, use_cache=True)
+    # Second call - without thinking
+    print("\nMaking second call without thinking...")
+    response2 = call_llm(test_prompt, use_cache=False, use_thinking=False)
     print(f"Response: {response2}")
+    
+    # Third call - should hit cache
+    print("\nMaking third call with cache...")
+    response3 = call_llm(test_prompt, use_cache=True)
+    print(f"Response: {response3}")
