@@ -1,6 +1,7 @@
 import os
 import argparse
 import logging
+from datetime import datetime
 from flow import coding_agent_flow
 
 # Set up logging with separate console and file handlers
@@ -55,24 +56,71 @@ def main():
             print("\n👋 Streamlit interface closed")
         return
     
-    # CLI mode - existing functionality
-    # If no query provided via command line, ask for it
-    user_query = args.query
-    if not user_query:
-        user_query = input("What would you like me to help you with? ")
-    
-    # Initialize shared memory
-    shared = {
-        "user_query": user_query,
-        "working_dir": args.working_dir,
-        "history": [],
-        "response": None
-    }
-    
+    # CLI mode - continuous conversation
     logger.info(f"Working directory: {args.working_dir}")
+    print(f"🤖 AI Coding Agent - CLI Mode")
+    print(f"📁 Working directory: {args.working_dir}")
+    print(f"💡 Type 'quit', 'exit', or 'bye' to end the session")
+    print(f"=" * 50)
     
-    # Run the flow
-    coding_agent_flow.run(shared)
+    # Initialize persistent shared memory for conversation
+    conversation_history = []
+    
+    # If query provided via command line, use it for first question
+    initial_query = args.query
+    
+    while True:
+        try:
+            # Get user query
+            if initial_query:
+                user_query = initial_query
+                initial_query = None  # Only use once
+                print(f"User: {user_query}")
+            else:
+                user_query = input("\n💬 You: ").strip()
+            
+            # Check for exit commands
+            if user_query.lower() in ['quit', 'exit', 'bye', 'q']:
+                print("👋 Goodbye!")
+                break
+            
+            if not user_query:
+                print("❓ Please enter a question or request.")
+                continue
+            
+            print(f"🤔 Processing your request...")
+            
+            # Initialize shared memory for this query (but preserve conversation history)
+            shared = {
+                "user_query": user_query,
+                "working_dir": args.working_dir,
+                "history": [],  # Fresh history for current query processing
+                "conversation_history": conversation_history,  # Persistent conversation history
+                "response": None
+            }
+            
+            # Run the flow
+            coding_agent_flow.run(shared)
+            
+            # Display the response
+            response = shared.get("response", "No response generated.")
+            print(f"\n🤖 Assistant: {response}")
+            
+            # Add this exchange to conversation history
+            conversation_history.append({
+                "user_query": user_query,
+                "response": response,
+                "timestamp": datetime.now().isoformat(),
+                "actions_taken": len(shared.get("history", []))
+            })
+            
+        except KeyboardInterrupt:
+            print("\n\n👋 Session interrupted. Goodbye!")
+            break
+        except Exception as e:
+            print(f"\n❌ Error: {e}")
+            logger.error(f"Error in main loop: {e}")
+            continue
 
 if __name__ == "__main__":
     main()

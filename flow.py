@@ -111,6 +111,9 @@ class MainDecisionAgent(Node):
         user_query = shared.get("user_query", "")
         history = shared.get("history", [])
         
+        # Store conversation history in instance for access in exec
+        self._conversation_history = shared.get("conversation_history", [])
+        
         return user_query, history
     
     def exec(self, inputs: Tuple[str, List[Dict[str, Any]]]) -> Dict[str, Any]:
@@ -120,14 +123,28 @@ class MainDecisionAgent(Node):
         # Use context manager to get optimized history
         history_str = context_manager.get_contextual_history(history, user_query)
         
+        # Get conversation history from shared state if available
+        conversation_history = getattr(self, '_conversation_history', [])
+        
+        # Format conversation history for context
+        conversation_context = ""
+        if conversation_history:
+            conversation_context = "\n\nPrevious conversation context:\n"
+            # Show last 3 conversations for context
+            recent_conversations = conversation_history[-3:]
+            for i, conv in enumerate(recent_conversations):
+                conversation_context += f"\nPrevious Query {i+1}: {conv['user_query']}\n"
+                conversation_context += f"Previous Response {i+1}: {conv['response'][:200]}{'...' if len(conv['response']) > 200 else ''}\n"
+        
         # Create prompt for the LLM using JSON format
         prompt = f"""You are a coding assistant that helps modify and navigate code. Given the following request, 
 decide which tool to use from the available options.
 
 User request: {user_query}
 
-Here are the actions you performed:
+Here are the actions you performed for this current request:
 {history_str}
+{conversation_context}
 
 Available tools:
 1. read_file: Read content from a file

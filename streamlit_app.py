@@ -143,6 +143,24 @@ def main():
                 st.warning("⚠️ Permission denied reading directory")
         elif working_dir:
             st.error(f"❌ Directory not found: `{working_dir}`")
+        
+        # Conversation history section
+        if 'conversation_history' in st.session_state and st.session_state.conversation_history:
+            st.divider()
+            st.header("💭 Conversation History")
+            
+            # Clear history button
+            if st.button("🗑️ Clear History", help="Clear all conversation history"):
+                st.session_state.conversation_history = []
+                st.rerun()
+            
+            # Show conversation history
+            with st.expander(f"📚 Previous Conversations ({len(st.session_state.conversation_history)})", expanded=False):
+                for i, conv in enumerate(reversed(st.session_state.conversation_history[-5:])):  # Show last 5
+                    st.write(f"**Q{len(st.session_state.conversation_history)-i}:** {conv['user_query'][:100]}{'...' if len(conv['user_query']) > 100 else ''}")
+                    st.write(f"**A:** {conv['response'][:150]}{'...' if len(conv['response']) > 150 else ''}")
+                    st.write(f"*{conv['actions_taken']} actions - {conv['timestamp'][:19]}*")
+                    st.divider()
     
     # Main interface
     col1, col2 = st.columns([1, 1])
@@ -172,6 +190,8 @@ def main():
         st.session_state.response = None
     if 'error' not in st.session_state:
         st.session_state.error = None
+    if 'conversation_history' not in st.session_state:
+        st.session_state.conversation_history = []
     
     # Process request
     if submit_button and user_query.strip():
@@ -189,6 +209,7 @@ def main():
             "user_query": user_query.strip(),
             "working_dir": working_dir,
             "history": [],
+            "conversation_history": st.session_state.conversation_history,  # Pass conversation history
             "response": None,
             "error": None
         }
@@ -248,10 +269,38 @@ def main():
             
             time.sleep(0.5)  # Update every 500ms
         
-        # Get final response
-        st.session_state.response = shared_data.get("response")
+        # Wait a bit more to ensure thread completion and response is set
+        if not agent_thread.is_alive():
+            time.sleep(0.5)  # Give thread time to finish cleanup
+            
+        # Get final response with retry logic
+        max_response_retries = 5
+        response_retry_count = 0
+        final_response = None
+        while response_retry_count < max_response_retries:
+            final_response = shared_data.get("response")
+            if final_response:
+                break
+            time.sleep(0.2)
+            response_retry_count += 1
+        
+        # Set final response and error
+        st.session_state.response = final_response or shared_data.get("response")
         st.session_state.error = shared_data.get("error")
         st.session_state.processing = False
+        
+        # Debug information
+        if not st.session_state.response and not st.session_state.error:
+            st.warning(f"⚠️ No response received after {response_retry_count} retries. Check logs for details.")
+        
+        # Add to conversation history if we got a response
+        if st.session_state.response:
+            st.session_state.conversation_history.append({
+                "user_query": user_query.strip(),
+                "response": st.session_state.response,
+                "timestamp": datetime.now().isoformat(),
+                "actions_taken": len(shared_data.get("history", []))
+            })
     
     # Display results
     if st.session_state.response or st.session_state.error:
