@@ -96,7 +96,8 @@ def main():
                 "working_dir": args.working_dir,
                 "history": [],  # Fresh history for current query processing
                 "conversation_history": conversation_history,  # Persistent conversation history
-                "response": None
+                "response": None,
+                "mode": "cli"  # Indicate CLI mode
             }
             
             # Run the flow

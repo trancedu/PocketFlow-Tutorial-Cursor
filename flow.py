@@ -12,7 +12,7 @@ from utils.delete_file import delete_file
 from utils.replace_file import replace_file
 from utils.search_ops import grep_search
 from utils.dir_ops import list_dir
-from utils.run_command import run_command, get_user_approval
+from utils.run_command import run_command, get_user_approval, get_streamlit_approval
 from utils.context_manager import ContextManager
 
 # Set up logging
@@ -510,17 +510,30 @@ class RunCommandAction(Node):
         return {
             "command": command,
             "reason": reason,
-            "working_dir": working_dir
+            "working_dir": working_dir,
+            "shared_data": shared  # Pass shared data for Streamlit detection
         }
     
     def exec(self, params: Dict[str, Any]) -> Tuple[bool, str]:
         command = params["command"]
         reason = params["reason"]
         working_dir = params["working_dir"]
+        shared_data = params.get("shared_data")  # Pass shared data for Streamlit mode
         
-        # Get user approval (only works in CLI mode)
-        if not get_user_approval(command, reason):
-            return False, "Command execution rejected by user"
+        # Detect if we're in CLI mode by checking the mode indicator
+        mode = shared_data.get("mode", "streamlit") if shared_data else "streamlit"
+        
+        if mode == "cli":
+            # CLI mode - use console approval
+            if not get_user_approval(command, reason):
+                return False, "Command execution rejected by user"
+        else:
+            # Streamlit mode - use UI approval
+            approved, final_command = get_streamlit_approval(command, reason, shared_data)
+            if not approved:
+                return False, "Command execution rejected by user"
+            # Use the potentially modified command
+            command = final_command
         
         # Execute the command
         return run_command(command, working_dir)
@@ -536,6 +549,15 @@ class RunCommandAction(Node):
                 "output": output,
                 "command": prep_res["command"]
             }
+        
+        # If the command was successful and appears to be a long-running service (like streamlit run),
+        # go directly to format response instead of back to main agent
+        command = prep_res.get("command", "")
+        if success and ("streamlit run" in command.lower() or "serve" in command.lower() or "server" in command.lower()):
+            return "finish"
+        
+        # For other commands, continue normal flow
+        return ""
 
 #############################################
 # Read Target File Node (Edit Agent)
@@ -869,6 +891,7 @@ def create_main_flow() -> Flow:
     list_dir_action >> main_agent
     delete_action >> main_agent
     run_command_action >> main_agent
+    run_command_action - "finish" >> format_response
     edit_agent >> main_agent
     
     # Create flow
