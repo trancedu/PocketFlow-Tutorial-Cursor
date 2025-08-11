@@ -74,8 +74,7 @@ class ContextManager:
             "content_hash": content_hash,
             "content": content,
             "size": len(content),
-            "lines": content.count('\n') + 1,
-            "estimated_tokens": int(self._estimate_tokens(content))
+            "lines": content.count('\n') + 1
         }
     
     def get_contextual_history(self, full_history: List[Dict[str, Any]], 

@@ -12,6 +12,7 @@ from utils.delete_file import delete_file
 from utils.replace_file import replace_file
 from utils.search_ops import grep_search
 from utils.dir_ops import list_dir
+from utils.context_manager import ContextManager
 
 # Set up logging
 logging.basicConfig(
@@ -24,6 +25,8 @@ logging.basicConfig(
 )
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger('coding_agent')
+
+context_manager = ContextManager()
 
 def format_history_summary(history: List[Dict[str, Any]]) -> str:
     if not history:
@@ -114,8 +117,8 @@ class MainDecisionAgent(Node):
         user_query, history = inputs
         logger.info(f"MainDecisionAgent: Analyzing user query: {user_query}")
 
-        # Format history using the utility function with 'basic' detail level
-        history_str = format_history_summary(history)
+        # Use context manager to get optimized history
+        history_str = context_manager.get_contextual_history(history, user_query)
         
         # Create prompt for the LLM using JSON format
         prompt = f"""You are a coding assistant that helps modify and navigate code. Given the following request, 
@@ -295,13 +298,25 @@ class ReadFileAction(Node):
         # Unpack the tuple returned by read_file()
         content, success = exec_res
         
-        # Update the result in the last history entry
-        history = shared.get("history", [])
-        if history:
-            history[-1]["result"] = {
-                "success": success,
-                "content": content
-            }
+        # Add file content to context manager for deduplication
+        if success and content:
+            content_info = context_manager.add_file_content(prep_res, content)
+            
+            # Update the result in the last history entry
+            history = shared.get("history", [])
+            if history:
+                history[-1]["result"] = {
+                    "success": success,
+                    "content_info": content_info
+                }
+        else:
+            # Update the result in the last history entry
+            history = shared.get("history", [])
+            if history:
+                history[-1]["result"] = {
+                    "success": success,
+                    "content": content
+                }
 
 #############################################
 # Grep Search Action Node
@@ -690,8 +705,9 @@ class FormatResponseNode(Node):
         if not history:
             return "No actions were performed."
         
-        # Generate a summary of actions for the LLM using the utility function
-        actions_summary = format_history_summary(history)
+        # Generate a summary of actions using the context manager
+        # Use a generic query since we want a complete summary for response generation
+        actions_summary = context_manager.get_contextual_history(history, "generate final response")
         
         # Prompt for the LLM to generate the final response
         prompt = f"""
