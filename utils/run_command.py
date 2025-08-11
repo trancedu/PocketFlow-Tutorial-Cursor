@@ -6,6 +6,7 @@ Executes shell commands with proper error handling and output capture.
 import subprocess
 import logging
 import os
+import time
 from typing import Tuple
 
 logger = logging.getLogger('run_command')
@@ -26,7 +27,28 @@ def run_command(command: str, working_dir: str = None, timeout: int = 30) -> Tup
         logger.info(f"Executing command: {command}")
         logger.info(f"Working directory: {working_dir or os.getcwd()}")
         
-        # Run the command
+        # Special handling for streamlit commands
+        if "streamlit run" in command.lower():
+            # For streamlit, run in background and don't capture output to allow browser opening
+            import threading
+            import webbrowser
+            
+            def run_streamlit():
+                subprocess.run(command, shell=True, cwd=working_dir)
+            
+            # Start streamlit in background thread
+            streamlit_thread = threading.Thread(target=run_streamlit, daemon=True)
+            streamlit_thread.start()
+            
+            # Give streamlit time to start
+            time.sleep(3)
+            
+            # Open browser to streamlit app
+            webbrowser.open("http://localhost:8501")
+            
+            return True, f"Streamlit application started successfully!\nCommand: {command}\nAccess at: http://localhost:8501\nThe application is running in the background."
+        
+        # Run the command normally for non-streamlit commands
         result = subprocess.run(
             command,
             shell=True,
@@ -84,6 +106,8 @@ def get_user_approval(command: str, reason: str) -> bool:
     print(f"Command: {command}")
     print(f"Reason:  {reason}")
     print(f"{'='*60}")
+    import sys
+    sys.stdout.flush()  # Ensure prompt is displayed immediately
     
     while True:
         try:
@@ -113,3 +137,25 @@ def get_user_approval(command: str, reason: str) -> bool:
         except EOFError:
             print("\n❌ Command rejected by user (EOF)")
             return False
+
+def get_streamlit_approval(command: str, reason: str, shared_data: dict) -> tuple[bool, str]:
+    """
+    Simplified Streamlit approval - just stores the command and returns False.
+    The Streamlit UI will handle the approval workflow separately.
+    """
+    # Store command for Streamlit UI to handle
+    shared_data["pending_command"] = {
+        "command": command,
+        "reason": reason,
+        "timestamp": time.time()
+    }
+    
+    # Return False to indicate command needs approval
+    # Streamlit UI will handle re-execution after approval
+    return False, f"Command requires approval: {command}"
+
+def execute_approved_command(command: str, working_dir: str = None) -> Tuple[bool, str]:
+    """
+    Execute a pre-approved command (for Streamlit use after user clicks approve)
+    """
+    return run_command(command, working_dir)

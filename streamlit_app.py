@@ -195,6 +195,8 @@ def main():
         st.session_state.current_query = ""
     if 'input_key_counter' not in st.session_state:
         st.session_state.input_key_counter = 0
+    if 'command_approval_counter' not in st.session_state:
+        st.session_state.command_approval_counter = 0
     
     # Main chat interface
     st.header("💬 Conversation")
@@ -306,7 +308,8 @@ def main():
             "history": [],
             "conversation_history": st.session_state.conversation_history,
             "response": None,
-            "error": None
+            "error": None,
+            "mode": "streamlit"  # Indicate Streamlit mode
         }
         
         # Create log queue and start processing  
@@ -344,6 +347,58 @@ def main():
                         st.session_state.logs.append(log_entry)
                 except queue.Empty:
                     pass
+                
+                # Check for pending command approval
+                pending_command = shared_data.get("pending_command")
+                if pending_command:
+                    # Show approval UI
+                    st.warning(f"🤖 AI wants to run: `{pending_command['command']}`")
+                    
+                    with st.container(border=True):
+                        st.markdown("### 🔧 Command Approval Required")
+                        st.markdown(f"**Command:** `{pending_command['command']}`")
+                        st.markdown(f"**Reason:** {pending_command['reason']}")
+                        st.markdown(f"**Working Directory:** {working_dir}")
+                        
+                        # Approval buttons 
+                        col1, col2, col3 = st.columns([1, 1, 2])
+                        
+                        with col1:
+                            if st.button("✅ Approve", type="primary", use_container_width=True, key="approve_cmd"):
+                                # Execute the command directly
+                                from utils.run_command import execute_approved_command
+                                success, output = execute_approved_command(
+                                    pending_command['command'], 
+                                    working_dir
+                                )
+                                
+                                # Clear pending command
+                                shared_data.pop("pending_command", None)
+                                
+                                # Show result
+                                if success:
+                                    st.success(f"✅ Command executed successfully!")
+                                    if output:
+                                        st.code(output, language="text")
+                                else:
+                                    st.error(f"❌ Command failed: {output}")
+                                
+                                time.sleep(1)
+                                st.rerun()
+                        
+                        with col2:
+                            if st.button("❌ Reject", type="secondary", use_container_width=True, key="reject_cmd"):
+                                # Clear pending command
+                                shared_data.pop("pending_command", None)
+                                st.error("❌ Command rejected!")
+                                time.sleep(1)
+                                st.rerun()
+                        
+                        with col3:
+                            st.caption("⚠️ Only approve commands you understand and trust")
+                    
+                    # Stop showing other content while approval is pending
+                    st.stop()
                 
                 # Update log display
                 if st.session_state.logs:
