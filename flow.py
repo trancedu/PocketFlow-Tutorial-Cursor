@@ -1,6 +1,6 @@
 from pocketflow import Node, Flow, BatchNode
 import os
-import yaml  # Add YAML support
+import json  # Add JSON support
 import logging
 from datetime import datetime
 from typing import List, Dict, Any, Tuple
@@ -117,7 +117,7 @@ class MainDecisionAgent(Node):
         # Format history using the utility function with 'basic' detail level
         history_str = format_history_summary(history)
         
-        # Create prompt for the LLM using YAML instead of JSON
+        # Create prompt for the LLM using JSON format
         prompt = f"""You are a coding assistant that helps modify and navigate code. Given the following request, 
 decide which tool to use from the available options.
 
@@ -191,15 +191,18 @@ Available tools:
      reason: I have completed the requested task of finding all logger instances
      params: {{}}
 
-Respond with a YAML object containing:
-```yaml
-tool: one of: read_file, edit_file, delete_file, grep_search, list_dir, finish
-reason: |
-  detailed explanation of why you chose this tool and what you intend to do
-  if you chose finish, explain why no more actions are needed
-params:
-  # parameters specific to the chosen tool
+Respond with a JSON object containing:
+```json
+{
+  "tool": "one of: read_file, edit_file, delete_file, grep_search, list_dir, finish",
+  "reason": "detailed explanation of why you chose this tool and what you intend to do. If you chose finish, explain why no more actions are needed",
+  "params": {
+    // parameters specific to the chosen tool
+  }
+}
 ```
+
+IMPORTANT: Ensure proper JSON indentation in your response. When including code examples in the reason field, maintain correct indentation within the JSON string.
 
 If you believe no more actions are needed, use "finish" as the tool and explain why in the reason.
 """
@@ -241,7 +244,7 @@ If you believe no more actions are needed, use "finish" as the tool and explain 
             
             return decision
         else:
-            raise ValueError("No YAML object found in response")
+            raise ValueError("No JSON object found in response")
     
     def post(self, shared: Dict[str, Any], prep_res: Any, exec_res: Dict[str, Any]) -> str:
         logger.info(f"MainDecisionAgent: Selected tool: {exec_res['tool']}")
@@ -512,7 +515,7 @@ class AnalyzeAndPlanNode(Node):
         file_lines = file_content.split('\n')
         total_lines = len(file_lines)
         
-        # Generate a prompt for the LLM to analyze the edit using YAML instead of JSON
+        # Generate a prompt for the LLM to analyze the edit using JSON format
         prompt = f"""
 As a code editing assistant, I need to convert the following code edit instruction 
 and code edit pattern into specific edit operations (start_line, end_line, replacement).
@@ -529,32 +532,27 @@ CODE EDIT PATTERN (markers like "// ... existing code ..." indicate unchanged co
 Analyze the file content and the edit pattern to determine exactly where changes should be made. 
 Be very careful with start and end lines. They are 1-indexed and inclusive. These will be REPLACED, not APPENDED!
 If you want APPEND, just copy that line as the first line of the replacement.
-Return a YAML object with your reasoning and an array of edit operations:
+Return a JSON object with your reasoning and an array of edit operations:
 
-```yaml
-reasoning: |
-  First explain your thinking process about how you're interpreting the edit pattern.
-  Explain how you identified where the edits should be made in the original file.
-  Describe any assumptions or decisions you made when determining the edit locations. 
-  You need to be very precise with the start and end lines! Reason why not 1 line before or after the start and end lines.
-
-operations:
-  - start_line: 10
-    end_line: 15
-    replacement: |
-      def process_file(filename):
-          # New implementation with better error handling
-          try:
-              with open(filename, 'r') as f:
-                  return f.read()
-          except FileNotFoundError:
-              return None
-              
-  - start_line: 25
-    end_line: 25
-    replacement: |
-      logger.info("File processing completed")
+```json
+{
+  "reasoning": "First explain your thinking process about how you're interpreting the edit pattern. Explain how you identified where the edits should be made in the original file. Describe any assumptions or decisions you made when determining the edit locations. You need to be very precise with the start and end lines! Reason why not 1 line before or after the start and end lines.",
+  "operations": [
+    {
+      "start_line": 10,
+      "end_line": 15,
+      "replacement": "def process_file(filename):\\n    # New implementation with better error handling\\n    try:\\n        with open(filename, 'r') as f:\\n            return f.read()\\n    except FileNotFoundError:\\n        return None"
+    },
+    {
+      "start_line": 25,
+      "end_line": 25,
+      "replacement": "logger.info(\\"File processing completed\\")"
+    }
+  ]
+}
 ```
+
+IMPORTANT: Ensure proper JSON formatting with correct escaping of quotes and newlines. Use \\n for newlines and \\" for quotes within strings. Maintain proper indentation in the replacement code by including the appropriate spaces and tabs in the replacement string.
 
 For lines that include "// ... existing code ...", do not include them in the replacement.
 Instead, identify the exact lines they represent in the original file and set the line 
@@ -567,24 +565,20 @@ to the maximum line number + 1, which will add the content at the end of the fil
         # Call LLM to analyze
         response = call_llm(prompt)
 
-        # Look for YAML structure in the response
-        yaml_content = ""
-        if "```yaml" in response:
-            yaml_blocks = response.split("```yaml")
-            if len(yaml_blocks) > 1:
-                yaml_content = yaml_blocks[1].split("```")[0].strip()
-        elif "```yml" in response:
-            yaml_blocks = response.split("```yml")
-            if len(yaml_blocks) > 1:
-                yaml_content = yaml_blocks[1].split("```")[0].strip()
+        # Look for JSON structure in the response
+        json_content = ""
+        if "```json" in response:
+            json_blocks = response.split("```json")
+            if len(json_blocks) > 1:
+                json_content = json_blocks[1].split("```")[0].strip()
         elif "```" in response:
             # Try to extract from generic code block
-            yaml_blocks = response.split("```")
-            if len(yaml_blocks) > 1:
-                yaml_content = yaml_blocks[1].strip()
+            json_blocks = response.split("```")
+            if len(json_blocks) > 1:
+                json_content = json_blocks[1].strip()
         
-        if yaml_content:
-            decision = yaml.safe_load(yaml_content)
+        if json_content:
+            decision = json.loads(json_content)
             
             # Validate the required fields
             assert "reasoning" in decision, "Reasoning is missing"
@@ -605,7 +599,7 @@ to the maximum line number + 1, which will add the content at the end of the fil
             
             return decision
         else:
-            raise ValueError("No YAML object found in response")
+            raise ValueError("No JSON object found in response")
     
     def post(self, shared: Dict[str, Any], prep_res: Dict[str, Any], exec_res: Dict[str, Any]) -> str:
         # Store reasoning and edit operations in shared
@@ -719,7 +713,7 @@ Generate a comprehensive yet concise response that explains:
 IMPORTANT: 
 - Focus on the outcomes and results, not the specific tools used
 - Write as if you are directly speaking to the user
-- When providing code examples or structured information, use YAML format enclosed in triple backticks
+- When providing code examples or structured information, use JSON format enclosed in triple backticks with proper indentation and escaping
 """
         
         # Call LLM to generate response
