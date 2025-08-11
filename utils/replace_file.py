@@ -18,9 +18,13 @@ def replace_file(target_file: str, start_line: int, end_line: int, content: str)
     """
 
     try:
-        # Check if file exists
+        # Create file if it doesn't exist
         if not os.path.exists(target_file):
-            return f"Error: File {target_file} does not exist", False
+            # Create directories if they don't exist
+            os.makedirs(os.path.dirname(os.path.abspath(target_file)), exist_ok=True)
+            # Create empty file
+            with open(target_file, 'w', encoding='utf-8') as f:
+                pass
         
         # Validate line numbers
         if start_line < 1:
