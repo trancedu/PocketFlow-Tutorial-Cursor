@@ -365,23 +365,54 @@ def main():
                         
                         with col1:
                             if st.button("✅ Approve", type="primary", use_container_width=True, key="approve_cmd"):
-                                # Execute the command directly
-                                from utils.run_command import execute_approved_command
-                                success, output = execute_approved_command(
-                                    pending_command['command'], 
-                                    working_dir
-                                )
+                                command = pending_command['command']
                                 
-                                # Clear pending command
-                                shared_data.pop("pending_command", None)
-                                
-                                # Show result
-                                if success:
-                                    st.success(f"✅ Command executed successfully!")
-                                    if output:
-                                        st.code(output, language="text")
+                                # Special handling for Streamlit commands to prevent conflicts
+                                if "streamlit run" in command.lower():
+                                    # Clear pending command first
+                                    shared_data.pop("pending_command", None)
+                                    
+                                    # Extract the file path from the streamlit command
+                                    parts = command.split("streamlit run", 1)
+                                    if len(parts) > 1:
+                                        file_path = parts[1].strip()
+                                        full_path = os.path.join(working_dir, file_path) if not os.path.isabs(file_path) else file_path
+                                        
+                                        # Show special message for Streamlit apps
+                                        st.success("✅ Streamlit command approved!")
+                                        st.info(f"📋 **Instructions:**")
+                                        st.markdown(f"""
+                                        To run your Streamlit app, please open a **new terminal** and run:
+                                        ```bash
+                                        cd {working_dir}
+                                        {command}
+                                        ```
+                                        
+                                        Or run it directly:
+                                        ```bash
+                                        streamlit run {full_path}
+                                        ```
+                                        
+                                        ⚠️ **Note:** Running Streamlit from within this interface would conflict with the current session.
+                                        The app will open in your browser at `http://localhost:8501` (or the next available port).
+                                        """)
+                                    else:
+                                        st.warning("⚠️ Could not parse Streamlit command properly")
                                 else:
-                                    st.error(f"❌ Command failed: {output}")
+                                    # Execute non-Streamlit commands normally
+                                    from utils.run_command import execute_approved_command
+                                    success, output = execute_approved_command(command, working_dir)
+                                    
+                                    # Clear pending command
+                                    shared_data.pop("pending_command", None)
+                                    
+                                    # Show result
+                                    if success:
+                                        st.success(f"✅ Command executed successfully!")
+                                        if output:
+                                            st.code(output, language="text")
+                                    else:
+                                        st.error(f"❌ Command failed: {output}")
                                 
                                 time.sleep(1)
                                 st.rerun()
