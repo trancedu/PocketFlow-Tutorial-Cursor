@@ -24,7 +24,7 @@ logger.addHandler(file_handler)
 cache_file = "llm_cache.json"
 
 # Learn more about calling the LLM: https://the-pocket.github.io/PocketFlow/utility_function/llm.html
-def call_llm(prompt: str, use_cache: bool = True, use_thinking: bool = True) -> str:
+def call_llm(prompt: str, use_cache: bool = True, use_thinking: bool = False) -> str:
     # Log the prompt
     logger.info(f"PROMPT: {prompt}")
     
@@ -114,7 +114,7 @@ if __name__ == "__main__":
     response2 = call_llm(test_prompt, use_cache=False, use_thinking=False)
     print(f"Response: {response2}")
     
-    # Third call - should hit cache
-    print("\nMaking third call with cache...")
+    # Third call - should hit cache (default: no thinking)
+    print("\nMaking third call with cache (default behavior)...")
     response3 = call_llm(test_prompt, use_cache=True)
     print(f"Response: {response3}")
