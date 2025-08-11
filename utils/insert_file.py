@@ -56,6 +56,10 @@ def insert_file(target_file: str, content: str, line_number: int = None) -> Tupl
             while len(lines) < position:
                 lines.append('\n')
                 
+            # Ensure content ends with newline to prevent concatenation
+            if not content.endswith('\n'):
+                content = content + '\n'
+            
             # Insert content at specified position
             if position == len(lines):
                 # Add at the end (may need newline if last line doesn't end with one)
