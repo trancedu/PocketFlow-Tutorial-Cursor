@@ -12,6 +12,7 @@ from utils.delete_file import delete_file
 from utils.replace_file import replace_file
 from utils.search_ops import grep_search
 from utils.dir_ops import list_dir
+from utils.run_command import run_command, get_user_approval
 from utils.context_manager import ContextManager
 
 # Set up logging
@@ -204,7 +205,18 @@ Available tools:
        relative_workspace_path: utils
    - Result: Returns a tree visualization of the directory structure
 
-6. finish: End the process and provide final response
+6. run_command: Execute a shell command (requires user approval)
+   - Parameters: command, reason
+   - Use ONLY when other tools cannot satisfy the requirement
+   - Requires explicit user approval before execution
+   - Example:
+     tool: run_command
+     reason: I need to install a Python package that is required for the project
+     params:
+       command: pip install requests
+       reason: The code requires the requests library but it's not installed
+
+7. finish: End the process and provide final response
    - No parameters required
    - Example:
      tool: finish
@@ -214,17 +226,18 @@ Available tools:
 Respond with a JSON object containing:
 ```json
 {{
-  "tool": "one of: read_file, edit_file, delete_file, grep_search, list_dir, finish",
-  "reason": "detailed explanation of why you chose this tool and what you intend to do. If you chose finish, explain why no more actions are needed",
+  "tool": "one of: read_file, edit_file, delete_file, grep_search, list_dir, run_command, finish",
+  "reason": "detailed explanation of why you chose this tool and what you intend to do. If you chose finish, explain why no more actions are needed. If you chose run_command, explain why other tools cannot satisfy the requirement and what the command will accomplish.",
   "params": {{
     "parameter_name": "parameter_value"
   }}
 }}
 ```
 
-IMPORTANT: Ensure proper JSON indentation in your response. When including code examples in the reason field, maintain correct indentation within the JSON string.
+IMPORTANT: Ensure proper JSON indentation in your response. When including code examples in the reason field, maintain correct indentation within the JSON string. Consider the previous conversation context when making decisions.
 
 If you believe no more actions are needed, use "finish" as the tool and explain why in the reason.
+Use "run_command" ONLY as a last resort when other tools cannot accomplish the task.
 """
         
         # Call LLM to decide action
@@ -469,6 +482,59 @@ class DeleteFileAction(Node):
             history[-1]["result"] = {
                 "success": success,
                 "message": message
+            }
+
+#############################################
+# Run Command Action Node
+#############################################
+class RunCommandAction(Node):
+    def prep(self, shared: Dict[str, Any]) -> Dict[str, Any]:
+        # Get parameters from the last history entry
+        history = shared.get("history", [])
+        if not history:
+            raise ValueError("No history found")
+        
+        last_action = history[-1]
+        command = last_action["params"].get("command")
+        reason = last_action["params"].get("reason", last_action.get("reason", ""))
+        
+        if not command:
+            raise ValueError("Missing command parameter")
+        
+        # Use the reason for logging
+        logger.info(f"RunCommandAction: {reason}")
+        
+        # Get working directory
+        working_dir = shared.get("working_dir", "")
+        
+        return {
+            "command": command,
+            "reason": reason,
+            "working_dir": working_dir
+        }
+    
+    def exec(self, params: Dict[str, Any]) -> Tuple[bool, str]:
+        command = params["command"]
+        reason = params["reason"]
+        working_dir = params["working_dir"]
+        
+        # Get user approval (only works in CLI mode)
+        if not get_user_approval(command, reason):
+            return False, "Command execution rejected by user"
+        
+        # Execute the command
+        return run_command(command, working_dir)
+    
+    def post(self, shared: Dict[str, Any], prep_res: Dict[str, Any], exec_res: Tuple[bool, str]) -> str:
+        success, output = exec_res
+        
+        # Update the result in the last history entry
+        history = shared.get("history", [])
+        if history:
+            history[-1]["result"] = {
+                "success": success,
+                "output": output,
+                "command": prep_res["command"]
             }
 
 #############################################
@@ -784,6 +850,7 @@ def create_main_flow() -> Flow:
     grep_action = GrepSearchAction()
     list_dir_action = ListDirAction()
     delete_action = DeleteFileAction()
+    run_command_action = RunCommandAction()
     edit_agent = create_edit_agent()
     format_response = FormatResponseNode()
     
@@ -792,6 +859,7 @@ def create_main_flow() -> Flow:
     main_agent - "grep_search" >> grep_action
     main_agent - "list_dir" >> list_dir_action
     main_agent - "delete_file" >> delete_action
+    main_agent - "run_command" >> run_command_action
     main_agent - "edit_file" >> edit_agent
     main_agent - "finish" >> format_response
     
@@ -800,6 +868,7 @@ def create_main_flow() -> Flow:
     grep_action >> main_agent
     list_dir_action >> main_agent
     delete_action >> main_agent
+    run_command_action >> main_agent
     edit_agent >> main_agent
     
     # Create flow
