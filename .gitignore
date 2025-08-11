@@ -20,11 +20,7 @@ __pycache__/
 .env.production
 
 # IDE - VSCode
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
+.vscode/
 
 # IDE - JetBrains
 .idea/
@@ -58,6 +54,7 @@ coverage/
 *.tmp
 *.temp
 .cache/
+llm_cache.json
 
 # Compiled files
 *.com
