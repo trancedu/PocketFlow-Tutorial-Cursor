@@ -1,8 +1,12 @@
-from anthropic import AnthropicVertex
+from anthropic import Anthropic
 import os
 import logging
 import json
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 log_directory = os.getenv("LOG_DIR", "logs")
@@ -41,9 +45,8 @@ def call_llm(prompt: str, use_cache: bool = True) -> str:
             return cache[prompt]
     
     # Call the LLM if not in cache or cache disabled
-    client = AnthropicVertex(
-        region=os.getenv("ANTHROPIC_REGION", "us-east5"),
-        project_id=os.getenv("ANTHROPIC_PROJECT_ID", "your-project-id")
+    client = Anthropic(
+        api_key=os.getenv("CLAUDE_API_KEY")
     )
     response = client.messages.create(
         max_tokens=20000,
