@@ -339,7 +339,15 @@ def main():
         
         # Check for pending command approval (BEFORE processing logs)
         pending_command = shared_data.get("pending_command")
+        
+        # Create a unique key for this pending command to track approval state
         if pending_command:
+            cmd_key = f"{pending_command['command']}_{pending_command['timestamp']}"
+            if f"approved_{cmd_key}" not in st.session_state:
+                st.session_state[f"approved_{cmd_key}"] = False
+        
+        # Only show approval buttons if command is pending AND not yet approved in UI
+        if pending_command and pending_command.get("status") == "pending" and not st.session_state.get(f"approved_{cmd_key}", False):
             st.warning(f"🤖 AI wants to run: `{pending_command['command']}`")
             
             with st.container(border=True):
@@ -353,18 +361,26 @@ def main():
                 
                 with col1:
                     if st.button("✅ Approve", type="primary", use_container_width=True, key="approve_cmd"):
-                        # Set approval status - the waiting thread will pick this up
+                        # Set approval status in shared data for background thread
                         shared_data["pending_command"]["status"] = "approved" 
                         shared_data["pending_command"]["final_command"] = pending_command['command']
+                        
+                        # Mark as approved in UI session state to prevent re-showing buttons
+                        st.session_state[f"approved_{cmd_key}"] = True
+                        
                         st.success("✅ Command approved! Processing will continue...")
-                        return
+                        st.rerun()  # Force immediate rerun to hide buttons
                 
                 with col2:
                     if st.button("❌ Reject", type="secondary", use_container_width=True, key="reject_cmd"):
-                        # Set rejection status - the waiting thread will pick this up
+                        # Set rejection status in shared data for background thread
                         shared_data["pending_command"]["status"] = "rejected"
+                        
+                        # Mark as approved (processed) in UI session state to prevent re-showing buttons
+                        st.session_state[f"approved_{cmd_key}"] = True
+                        
                         st.error("❌ Command rejected!")
-                        return
+                        st.rerun()  # Force immediate rerun to hide buttons
                 
                 with col3:
                     st.caption("⚠️ Only approve commands you understand and trust")
@@ -372,6 +388,14 @@ def main():
             # Show processing status while waiting for approval
             st.info("⏳ Waiting for command approval...")
             return
+        
+        # Show status for approved/rejected commands that are still being processed
+        if pending_command and pending_command.get("status") in ["approved", "rejected"]:
+            status = pending_command.get("status")
+            if status == "approved":
+                st.info("✅ Command approved - executing...")
+            else:
+                st.info("❌ Command rejected - continuing with alternative approach...")
         
         # Process new log entries (only if no pending command)
         new_logs = []
