@@ -3,6 +3,7 @@ import os
 import logging
 import json
 from datetime import datetime
+from typing import Optional
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -35,9 +36,16 @@ logger.addHandler(file_handler)
 cache_file = "llm_cache.json"
 
 # Learn more about calling the LLM: https://the-pocket.github.io/PocketFlow/utility_function/llm.html
-def call_llm(prompt: str, use_cache: bool = True, use_thinking: bool = False) -> str:
-    # Log the prompt
-    logger.debug(f"PROMPT: {prompt}")
+def call_llm(
+    prompt: str,
+    use_cache: bool = True,
+    use_thinking: bool = False,
+    caller: Optional[str] = None,
+) -> str:
+    """Call the LLM and log prompt/response with optional caller context."""
+    caller_tag = caller or "unknown"
+    # Log the prompt with caller context
+    logger.debug(f"PROMPT [{caller_tag}]: {prompt}")
     
     # Check cache if enabled
     if use_cache:
@@ -52,7 +60,7 @@ def call_llm(prompt: str, use_cache: bool = True, use_thinking: bool = False) ->
         
         # Return from cache if exists
         if prompt in cache:
-            logger.debug(f"Cache hit for prompt: {prompt[:50]}...")
+            logger.debug(f"Cache hit [{caller_tag}] for prompt: {prompt[:50]}...")
             return cache[prompt]
     
     # Call the LLM if not in cache or cache disabled
@@ -82,7 +90,7 @@ def call_llm(prompt: str, use_cache: bool = True, use_thinking: bool = False) ->
         response_text = response.content[0].text  # Without thinking, response is at index 0
     
     # Log the response
-    logger.info(f"RESPONSE: {response_text}")
+    logger.info(f"RESPONSE [{caller_tag}]: {response_text}")
     
     # Update cache if enabled
     if use_cache:
@@ -100,7 +108,7 @@ def call_llm(prompt: str, use_cache: bool = True, use_thinking: bool = False) ->
         try:
             with open(cache_file, 'w') as f:
                 json.dump(cache, f)
-            logger.info(f"Added to cache")
+            logger.info(f"Added to cache [{caller_tag}]")
         except Exception as e:
             logger.error(f"Failed to save cache: {e}")
     

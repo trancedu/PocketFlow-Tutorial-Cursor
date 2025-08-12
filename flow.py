@@ -286,7 +286,7 @@ Use "run_command" ONLY as a last resort when other tools cannot accomplish the t
 """
         
         # Call LLM to decide action
-        response = call_llm(prompt)
+        response = call_llm(prompt, caller="MainDecisionAgent.exec")
 
         # Look for JSON structure in the response
         json_content = ""
@@ -742,7 +742,7 @@ to the maximum line number + 1, which will add the content at the end of the fil
 """
         
         # Call LLM to analyze
-        response = call_llm(prompt)
+        response = call_llm(prompt, caller="AnalyzeAndPlanNode.exec")
 
         # Look for JSON structure in the response
         json_content = ""
@@ -897,7 +897,7 @@ IMPORTANT:
 """
         
         # Call LLM to generate response
-        response = call_llm(prompt)
+        response = call_llm(prompt, caller="FormatResponseNode.exec")
         
         return response
     
