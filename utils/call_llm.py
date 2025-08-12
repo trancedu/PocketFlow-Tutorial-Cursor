@@ -11,7 +11,8 @@ load_dotenv()
 # Configure logging
 log_directory = os.getenv("LOG_DIR", "logs")
 os.makedirs(log_directory, exist_ok=True)
-log_file = os.path.join(log_directory, f"llm_calls_{datetime.now().strftime('%Y%m%d')}.log")
+# Use per-run timestamped file (to seconds) instead of per-day
+log_file = os.path.join(log_directory, f"llm_calls_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
 
 # Set up logger
 logger = logging.getLogger("llm_logger")
