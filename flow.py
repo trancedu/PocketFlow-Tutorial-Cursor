@@ -63,8 +63,8 @@ def format_history_summary(history: List[Dict[str, Any]]) -> str:
                         error_summary = output.split('\n')[0] if output else "Command failed"
                         history_str += f"- Result: Failed - {error_summary}\n"
                     else:
-                        # For other tools, try to get error message
-                        error_msg = result.get("message", result.get("error", "Unknown error"))
+                        # For other tools, try to get error message (fallback to content)
+                        error_msg = result.get("message") or result.get("error") or result.get("content") or "Unknown error"
                         history_str += f"- Result: Failed - {error_msg}\n"
                 
                 # Add tool-specific details
@@ -187,8 +187,8 @@ decide which tool to use from the available options.
 User request: {user_query}
 
 Here are the actions you performed for this current request:
-{history_str}
-{conversation_context}
+history_str: {history_str}
+conversation_context: {conversation_context}
 
 Available tools:
 1. read_file: Read content from a file
@@ -388,7 +388,8 @@ class ReadFileAction(Node):
             if history:
                 history[-1]["result"] = {
                     "success": success,
-                    "content": content
+                    # store error in message to surface clearly in summaries
+                    "message": content
                 }
 
 #############################################

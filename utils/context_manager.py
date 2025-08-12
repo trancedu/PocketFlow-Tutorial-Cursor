@@ -175,8 +175,8 @@ class ContextManager:
                     error_summary = output.split('\n')[0] if output else "Command failed"
                     result.append(f"- Result: Failed - {error_summary}")
                 else:
-                    # For other tools, try to get error message
-                    error_msg = action_result.get("message", action_result.get("error", "Unknown error"))
+                    # For other tools, try to get error message (fallback to content)
+                    error_msg = action_result.get("message") or action_result.get("error") or action_result.get("content") or "Unknown error"
                     result.append(f"- Result: Failed - {error_msg}")
             
             if action['tool'] == 'read_file' and success:
