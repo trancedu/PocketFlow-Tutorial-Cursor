@@ -257,13 +257,8 @@ class ContextManager:
             elif action['tool'] == 'list_dir' and success:
                 tree = action_result.get("tree_visualization", "")
                 if tree:
-                    # Show truncated tree for context
-                    lines = tree.split('\n')
-                    if len(lines) > 10:
-                        truncated = '\n'.join(lines[:10]) + f"\n... [{len(lines) - 10} more items]"
-                        result.append(f"- Directory structure:\n  {truncated.replace(chr(10), chr(10) + '  ')}")
-                    else:
-                        result.append(f"- Directory structure:\n  {tree.replace(chr(10), chr(10) + '  ')}")
+                    # Show full tree (no preview truncation)
+                    result.append(f"- Directory structure:\n  {tree.replace(chr(10), chr(10) + '  ')}")
         
         return '\n'.join(result)
     

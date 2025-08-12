@@ -90,17 +90,15 @@ def format_history_summary(history: List[Dict[str, Any]]) -> str:
                     # Get the tree visualization string
                     tree_visualization = result.get("tree_visualization", "")
                     history_str += "- Directory structure:\n"
-                    
+
                     # Properly handle and format the tree visualization
                     if tree_visualization and isinstance(tree_visualization, str):
-                        # First, ensure we handle any special line ending characters properly
+                        # Normalize line endings
                         clean_tree = tree_visualization.replace('\r\n', '\n').strip()
-                        
+
                         if clean_tree:
-                            # Add each line with proper indentation
                             for line in clean_tree.split('\n'):
-                                # Ensure the line is properly indented
-                                if line.strip():  # Only include non-empty lines
+                                if line.strip():
                                     history_str += f"  {line}\n"
                         else:
                             history_str += "  (No tree structure data)\n"
