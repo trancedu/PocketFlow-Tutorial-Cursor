@@ -140,19 +140,34 @@ def get_user_approval(command: str, reason: str) -> bool:
 
 def get_streamlit_approval(command: str, reason: str, shared_data: dict) -> tuple[bool, str]:
     """
-    Simplified Streamlit approval - just stores the command and returns False.
-    The Streamlit UI will handle the approval workflow separately.
+    Streamlit approval - stores command and waits indefinitely for user approval.
     """
     # Store command for Streamlit UI to handle
     shared_data["pending_command"] = {
         "command": command,
         "reason": reason,
-        "timestamp": time.time()
+        "timestamp": time.time(),
+        "status": "pending"
     }
     
-    # Return False to indicate command needs approval
-    # Streamlit UI will handle re-execution after approval
-    return False, f"Command requires approval: {command}"
+    # Wait indefinitely until user approves or rejects
+    while True:
+        time.sleep(0.5)  # Check every 500ms
+        
+        pending_cmd = shared_data.get("pending_command", {})
+        status = pending_cmd.get("status", "pending")
+        
+        if status == "approved":
+            # Command approved - clean up and return success
+            final_command = pending_cmd.get("final_command", command)
+            shared_data.pop("pending_command", None)
+            return True, final_command
+        elif status == "rejected":
+            # Command rejected - clean up and return failure
+            shared_data.pop("pending_command", None)
+            return False, "Command rejected by user"
+        
+        # Still pending - continue waiting
 
 def execute_approved_command(command: str, working_dir: str = None) -> Tuple[bool, str]:
     """

@@ -353,64 +353,17 @@ def main():
                 
                 with col1:
                     if st.button("✅ Approve", type="primary", use_container_width=True, key="approve_cmd"):
-                        command = pending_command['command']
-                        
-                        # Special handling for Streamlit commands to prevent conflicts
-                        if "streamlit run" in command.lower():
-                            # Clear pending command first
-                            shared_data.pop("pending_command", None)
-                            
-                            # Extract the file path from the streamlit command
-                            parts = command.split("streamlit run", 1)
-                            if len(parts) > 1:
-                                file_path = parts[1].strip()
-                                full_path = os.path.join(working_dir, file_path) if not os.path.isabs(file_path) else file_path
-                                
-                                # Show special message for Streamlit apps
-                                st.success("✅ Streamlit command approved!")
-                                st.info(f"📋 **Instructions:**")
-                                st.markdown(f"""
-                                To run your Streamlit app, please open a **new terminal** and run:
-                                ```bash
-                                cd {working_dir}
-                                {command}
-                                ```
-                                
-                                Or run it directly:
-                                ```bash
-                                streamlit run {full_path}
-                                ```
-                                
-                                ⚠️ **Note:** Running Streamlit from within this interface would conflict with the current session.
-                                The app will open in your browser at `http://localhost:8501` (or the next available port).
-                                """)
-                            else:
-                                st.warning("⚠️ Could not parse Streamlit command properly")
-                        else:
-                            # Execute non-Streamlit commands normally
-                            from utils.run_command import execute_approved_command
-                            success, output = execute_approved_command(command, working_dir)
-                            
-                            # Clear pending command
-                            shared_data.pop("pending_command", None)
-                            
-                            # Show result
-                            if success:
-                                st.success(f"✅ Command executed successfully!")
-                                if output:
-                                    st.code(output, language="text")
-                            else:
-                                st.error(f"❌ Command failed: {output}")
-                        
-                        # Don't rerun immediately - let the processing continue
+                        # Set approval status - the waiting thread will pick this up
+                        shared_data["pending_command"]["status"] = "approved" 
+                        shared_data["pending_command"]["final_command"] = pending_command['command']
+                        st.success("✅ Command approved! Processing will continue...")
                         return
                 
                 with col2:
                     if st.button("❌ Reject", type="secondary", use_container_width=True, key="reject_cmd"):
-                        # Clear pending command
-                        shared_data.pop("pending_command", None)
+                        # Set rejection status - the waiting thread will pick this up
+                        shared_data["pending_command"]["status"] = "rejected"
                         st.error("❌ Command rejected!")
-                        # Don't rerun immediately - let the processing continue
                         return
                 
                 with col3:
