@@ -301,188 +301,179 @@ def main():
     
     # Show processing interface if currently processing
     if st.session_state.processing:
-        # Create shared data for the current processing
-        shared_data = {
-            "user_query": st.session_state.current_query,
-            "working_dir": working_dir,
-            "history": [],
-            "conversation_history": st.session_state.conversation_history,
-            "response": None,
-            "error": None,
-            "mode": "streamlit"  # Indicate Streamlit mode
-        }
+        # Initialize shared data and thread if not exists
+        if 'processing_thread' not in st.session_state:
+            # Create shared data for the current processing
+            st.session_state.shared_data = {
+                "user_query": st.session_state.current_query,
+                "working_dir": working_dir,
+                "history": [],
+                "conversation_history": st.session_state.conversation_history,
+                "response": None,
+                "error": None,
+                "mode": "streamlit"  # Indicate Streamlit mode
+            }
+            
+            # Create log queue and start processing  
+            st.session_state.log_queue = queue.Queue()
+            
+            # Start agent in separate thread
+            st.session_state.processing_thread = threading.Thread(
+                target=run_agent_flow,
+                args=(st.session_state.shared_data, st.session_state.log_queue),
+                daemon=True
+            )
+            st.session_state.processing_thread.start()
+            st.session_state.processing_start_time = time.time()
         
-        # Create log queue and start processing  
-        log_queue = queue.Queue()
+        # Get current thread and data
+        agent_thread = st.session_state.processing_thread
+        shared_data = st.session_state.shared_data
+        log_queue = st.session_state.log_queue
         
-        # Start agent in separate thread
-        agent_thread = threading.Thread(
-            target=run_agent_flow,
-            args=(shared_data, log_queue),
-            daemon=True
-        )
-        agent_thread.start()
-        
-        # Show processing logs in an expander
-        with st.expander("📝 Processing Logs", expanded=True):
-            log_placeholder = st.empty()
-            status_placeholder = st.empty()
-            
-            # Monitor logs and thread
-            start_time = time.time()
-            max_wait_time = 120  # 2 minutes timeout
-            
-            while agent_thread.is_alive() or not log_queue.empty():
-                # Check timeout
-                if time.time() - start_time > max_wait_time:
-                    st.error("⏰ Process timed out after 2 minutes")
-                    break
-                
-                # Get new log entries
-                new_logs = []
-                try:
-                    while True:
-                        log_entry = log_queue.get_nowait()
-                        new_logs.append(log_entry)
-                        st.session_state.logs.append(log_entry)
-                except queue.Empty:
-                    pass
-                
-                # Check for pending command approval
-                pending_command = shared_data.get("pending_command")
-                if pending_command:
-                    # Show approval UI
-                    st.warning(f"🤖 AI wants to run: `{pending_command['command']}`")
-                    
-                    with st.container(border=True):
-                        st.markdown("### 🔧 Command Approval Required")
-                        st.markdown(f"**Command:** `{pending_command['command']}`")
-                        st.markdown(f"**Reason:** {pending_command['reason']}")
-                        st.markdown(f"**Working Directory:** {working_dir}")
-                        
-                        # Approval buttons 
-                        col1, col2, col3 = st.columns([1, 1, 2])
-                        
-                        with col1:
-                            if st.button("✅ Approve", type="primary", use_container_width=True, key="approve_cmd"):
-                                command = pending_command['command']
-                                
-                                # Special handling for Streamlit commands to prevent conflicts
-                                if "streamlit run" in command.lower():
-                                    # Clear pending command first
-                                    shared_data.pop("pending_command", None)
-                                    
-                                    # Extract the file path from the streamlit command
-                                    parts = command.split("streamlit run", 1)
-                                    if len(parts) > 1:
-                                        file_path = parts[1].strip()
-                                        full_path = os.path.join(working_dir, file_path) if not os.path.isabs(file_path) else file_path
-                                        
-                                        # Show special message for Streamlit apps
-                                        st.success("✅ Streamlit command approved!")
-                                        st.info(f"📋 **Instructions:**")
-                                        st.markdown(f"""
-                                        To run your Streamlit app, please open a **new terminal** and run:
-                                        ```bash
-                                        cd {working_dir}
-                                        {command}
-                                        ```
-                                        
-                                        Or run it directly:
-                                        ```bash
-                                        streamlit run {full_path}
-                                        ```
-                                        
-                                        ⚠️ **Note:** Running Streamlit from within this interface would conflict with the current session.
-                                        The app will open in your browser at `http://localhost:8501` (or the next available port).
-                                        """)
-                                    else:
-                                        st.warning("⚠️ Could not parse Streamlit command properly")
-                                else:
-                                    # Execute non-Streamlit commands normally
-                                    from utils.run_command import execute_approved_command
-                                    success, output = execute_approved_command(command, working_dir)
-                                    
-                                    # Clear pending command
-                                    shared_data.pop("pending_command", None)
-                                    
-                                    # Show result
-                                    if success:
-                                        st.success(f"✅ Command executed successfully!")
-                                        if output:
-                                            st.code(output, language="text")
-                                    else:
-                                        st.error(f"❌ Command failed: {output}")
-                                
-                                time.sleep(1)
-                                st.rerun()
-                        
-                        with col2:
-                            if st.button("❌ Reject", type="secondary", use_container_width=True, key="reject_cmd"):
-                                # Clear pending command
-                                shared_data.pop("pending_command", None)
-                                st.error("❌ Command rejected!")
-                                time.sleep(1)
-                                st.rerun()
-                        
-                        with col3:
-                            st.caption("⚠️ Only approve commands you understand and trust")
-                    
-                    # Stop showing other content while approval is pending
-                    st.stop()
-                
-                # Update log display
-                if st.session_state.logs:
-                    with log_placeholder.container():
-                        # Show recent logs in a code block
-                        recent_logs = st.session_state.logs[-15:]  # Show last 15 entries
-                        log_text = "\n".join(recent_logs)
-                        st.code(log_text, language="text")
-                
-                # Update status
-                if agent_thread.is_alive():
-                    status_placeholder.info(f"🔄 Processing... ({len(st.session_state.logs)} log entries)")
-                else:
-                    status_placeholder.success(f"✅ Processing complete!")
-                
-                time.sleep(0.5)  # Update every 500ms
-            
-            # Wait for thread completion and get response
-            if not agent_thread.is_alive():
-                time.sleep(0.5)  # Give thread time to finish cleanup
-                
-            # Get final response with retry logic
-            max_response_retries = 5
-            response_retry_count = 0
-            final_response = None
-            while response_retry_count < max_response_retries:
-                final_response = shared_data.get("response")
-                if final_response:
-                    break
-                time.sleep(0.2)
-                response_retry_count += 1
-            
-            # Set final response and error
-            st.session_state.response = final_response or shared_data.get("response")
-            st.session_state.error = shared_data.get("error")
+        # Check for timeout
+        if time.time() - st.session_state.processing_start_time > 120:  # 2 minutes timeout
+            st.error("⏰ Process timed out after 2 minutes")
             st.session_state.processing = False
-            
-            # Add to conversation history if we got a response
-            if st.session_state.response:
-                st.session_state.conversation_history.append({
-                    "user_query": shared_data["user_query"],
-                    "response": st.session_state.response,
-                    "timestamp": datetime.now().isoformat(),
-                    "actions_taken": len(shared_data.get("history", []))
-                })
-            
-            # Clear the current query to reset input box
-            st.session_state.current_query = ""
-            # Increment input key counter to force new text area widget
-            st.session_state.input_key_counter += 1
-            
-            # Rerun to show the updated conversation
             st.rerun()
+        
+        # Check for pending command approval (BEFORE processing logs)
+        pending_command = shared_data.get("pending_command")
+        if pending_command:
+            st.warning(f"🤖 AI wants to run: `{pending_command['command']}`")
+            
+            with st.container(border=True):
+                st.markdown("### 🔧 Command Approval Required")
+                st.markdown(f"**Command:** `{pending_command['command']}`")
+                st.markdown(f"**Reason:** {pending_command['reason']}")
+                st.markdown(f"**Working Directory:** {working_dir}")
+                
+                # Approval buttons 
+                col1, col2, col3 = st.columns([1, 1, 2])
+                
+                with col1:
+                    if st.button("✅ Approve", type="primary", use_container_width=True, key="approve_cmd"):
+                        command = pending_command['command']
+                        
+                        # Special handling for Streamlit commands to prevent conflicts
+                        if "streamlit run" in command.lower():
+                            # Clear pending command first
+                            shared_data.pop("pending_command", None)
+                            
+                            # Extract the file path from the streamlit command
+                            parts = command.split("streamlit run", 1)
+                            if len(parts) > 1:
+                                file_path = parts[1].strip()
+                                full_path = os.path.join(working_dir, file_path) if not os.path.isabs(file_path) else file_path
+                                
+                                # Show special message for Streamlit apps
+                                st.success("✅ Streamlit command approved!")
+                                st.info(f"📋 **Instructions:**")
+                                st.markdown(f"""
+                                To run your Streamlit app, please open a **new terminal** and run:
+                                ```bash
+                                cd {working_dir}
+                                {command}
+                                ```
+                                
+                                Or run it directly:
+                                ```bash
+                                streamlit run {full_path}
+                                ```
+                                
+                                ⚠️ **Note:** Running Streamlit from within this interface would conflict with the current session.
+                                The app will open in your browser at `http://localhost:8501` (or the next available port).
+                                """)
+                            else:
+                                st.warning("⚠️ Could not parse Streamlit command properly")
+                        else:
+                            # Execute non-Streamlit commands normally
+                            from utils.run_command import execute_approved_command
+                            success, output = execute_approved_command(command, working_dir)
+                            
+                            # Clear pending command
+                            shared_data.pop("pending_command", None)
+                            
+                            # Show result
+                            if success:
+                                st.success(f"✅ Command executed successfully!")
+                                if output:
+                                    st.code(output, language="text")
+                            else:
+                                st.error(f"❌ Command failed: {output}")
+                        
+                        # Don't rerun immediately - let the processing continue
+                        return
+                
+                with col2:
+                    if st.button("❌ Reject", type="secondary", use_container_width=True, key="reject_cmd"):
+                        # Clear pending command
+                        shared_data.pop("pending_command", None)
+                        st.error("❌ Command rejected!")
+                        # Don't rerun immediately - let the processing continue
+                        return
+                
+                with col3:
+                    st.caption("⚠️ Only approve commands you understand and trust")
+            
+            # Show processing status while waiting for approval
+            st.info("⏳ Waiting for command approval...")
+            return
+        
+        # Process new log entries (only if no pending command)
+        new_logs = []
+        try:
+            while True:
+                log_entry = log_queue.get_nowait()
+                new_logs.append(log_entry)
+                st.session_state.logs.append(log_entry)
+        except queue.Empty:
+            pass
+        
+        # Show processing logs
+        with st.expander("📝 Processing Logs", expanded=True):
+            if st.session_state.logs:
+                # Show recent logs in a code block
+                recent_logs = st.session_state.logs[-15:]  # Show last 15 entries
+                log_text = "\n".join(recent_logs)
+                st.code(log_text, language="text")
+            
+            # Show status
+            if agent_thread.is_alive():
+                st.info(f"🔄 Processing... ({len(st.session_state.logs)} log entries)")
+                # Auto-refresh every 2 seconds instead of 0.5 seconds
+                time.sleep(2)
+                st.rerun()
+            else:
+                st.success(f"✅ Processing complete!")
+                
+                # Get final response
+                final_response = shared_data.get("response")
+                st.session_state.response = final_response
+                st.session_state.error = shared_data.get("error")
+                st.session_state.processing = False
+                
+                # Clean up processing state
+                del st.session_state.processing_thread
+                del st.session_state.shared_data
+                del st.session_state.log_queue
+                del st.session_state.processing_start_time
+                
+                # Add to conversation history if we got a response
+                if final_response:
+                    st.session_state.conversation_history.append({
+                        "user_query": st.session_state.current_query,
+                        "response": final_response,
+                        "timestamp": datetime.now().isoformat(),
+                        "actions_taken": len(shared_data.get("history", []))
+                    })
+                
+                # Clear the current query and increment input counter
+                st.session_state.current_query = ""
+                st.session_state.input_key_counter += 1
+                
+                # Final rerun to show the updated conversation
+                st.rerun()
     
     # Show detailed logs if available
     if st.session_state.logs and not st.session_state.processing:
