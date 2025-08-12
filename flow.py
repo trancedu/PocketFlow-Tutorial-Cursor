@@ -95,6 +95,25 @@ def format_history_summary(history: List[Dict[str, Any]]) -> str:
                     else:
                         history_str += "  (Empty or inaccessible directory)\n"
                         logger.debug(f"Tree visualization missing or invalid: {tree_visualization}")
+                elif action['tool'] == 'run_command' and success:
+                    command = result.get("command", "Unknown command")
+                    output = result.get("output", "")
+                    original_command = result.get("original_command")
+                    
+                    if original_command:
+                        # Command was modified - make this VERY clear to AI
+                        history_str += f"- ⚠️ COMMAND MODIFIED BY USER:\n"
+                        history_str += f"  • You requested: {original_command}\n"
+                        history_str += f"  • User executed: {command}\n"
+                        history_str += f"- IMPORTANT: Reference the executed command in responses\n"
+                    else:
+                        # Command executed as originally requested
+                        history_str += f"- Executed Command: {command}\n"
+                    
+                    if output:
+                        # Show first 300 chars of output
+                        display_output = output[:300] + "..." if len(output) > 300 else output
+                        history_str += f"- Output: {display_output}\n"
             else:
                 history_str += f"- Result: {result}\n"
         
@@ -522,6 +541,7 @@ class RunCommandAction(Node):
         
         # Detect if we're in CLI mode by checking the mode indicator
         mode = shared_data.get("mode", "streamlit") if shared_data else "streamlit"
+        original_command = command
         
         if mode == "cli":
             # CLI mode - use console approval
@@ -535,6 +555,13 @@ class RunCommandAction(Node):
             # Use the potentially modified command
             command = final_command
         
+        # Store modification info in shared data if command was changed
+        if command != original_command:
+            shared_data["command_modification"] = {
+                "original": original_command,
+                "executed": command
+            }
+        
         # Execute the command
         return run_command(command, working_dir)
     
@@ -544,10 +571,20 @@ class RunCommandAction(Node):
         # Update the result in the last history entry
         history = shared.get("history", [])
         if history:
+            # Check if command was modified
+            modification_info = shared.get("command_modification")
+            if modification_info:
+                executed_command = modification_info["executed"]
+                original_command = modification_info["original"]
+            else:
+                executed_command = prep_res["command"]
+                original_command = None
+            
             history[-1]["result"] = {
                 "success": success,
                 "output": output,
-                "command": prep_res["command"]
+                "command": executed_command,
+                "original_command": original_command
             }
         
         # If the command was successful and appears to be a long-running service (like streamlit run),

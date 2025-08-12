@@ -197,6 +197,26 @@ class ContextManager:
             elif action['tool'] == 'edit_file' and success:
                 operations = action_result.get("operations", 0)
                 result.append(f"- Applied {operations} edit operations")
+            
+            elif action['tool'] == 'run_command' and success:
+                command = action_result.get("command", "Unknown command")
+                original_command = action_result.get("original_command")
+                
+                if original_command:
+                    # Command was modified - make this VERY clear to AI
+                    result.append("- ⚠️ COMMAND MODIFIED BY USER:")
+                    result.append(f"  • You requested: {original_command}")
+                    result.append(f"  • User executed: {command}")
+                    result.append("- IMPORTANT: Reference the executed command in responses")
+                else:
+                    # Command executed as originally requested
+                    result.append(f"- Executed Command: {command}")
+                
+                output = action_result.get("output", "")
+                if output:
+                    # Show first 200 chars of output for context
+                    display_output = output[:200] + "..." if len(output) > 200 else output
+                    result.append(f"- Output: {display_output}")
                 
                 reasoning = action_result.get("reasoning", "")
                 if reasoning and is_recent:
