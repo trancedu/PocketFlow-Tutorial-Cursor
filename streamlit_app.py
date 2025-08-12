@@ -348,13 +348,33 @@ def main():
         
         # Only show approval buttons if command is pending AND not yet approved in UI
         if pending_command and pending_command.get("status") == "pending" and not st.session_state.get(f"approved_{cmd_key}", False):
-            st.warning(f"🤖 AI wants to run: `{pending_command['command']}`")
+            st.warning(f"🤖 AI wants to run a command. You can review and edit it before approving.")
             
             with st.container(border=True):
                 st.markdown("### 🔧 Command Approval Required")
-                st.markdown(f"**Command:** `{pending_command['command']}`")
+                st.markdown(f"**Original Command:** `{pending_command['command']}`")
                 st.markdown(f"**Reason:** {pending_command['reason']}")
                 st.markdown(f"**Working Directory:** {working_dir}")
+                
+                # Editable command input
+                st.markdown("**Edit Command (if needed):**")
+                edited_command = st.text_input(
+                    "Command to execute:",
+                    value=pending_command['command'],
+                    key=f"edit_cmd_{cmd_key}",
+                    help="You can modify the command before approving it"
+                )
+                
+                # Show diff if command was edited
+                if edited_command != pending_command['command']:
+                    st.info("🔄 **Command modified:**")
+                    col_orig, col_edited = st.columns(2)
+                    with col_orig:
+                        st.markdown("**Original:**")
+                        st.code(pending_command['command'], language="bash")
+                    with col_edited:
+                        st.markdown("**Modified:**")
+                        st.code(edited_command, language="bash")
                 
                 # Approval buttons 
                 col1, col2, col3 = st.columns([1, 1, 2])
@@ -363,12 +383,15 @@ def main():
                     if st.button("✅ Approve", type="primary", use_container_width=True, key="approve_cmd"):
                         # Set approval status in shared data for background thread
                         shared_data["pending_command"]["status"] = "approved" 
-                        shared_data["pending_command"]["final_command"] = pending_command['command']
+                        shared_data["pending_command"]["final_command"] = edited_command  # Use edited command
                         
                         # Mark as approved in UI session state to prevent re-showing buttons
                         st.session_state[f"approved_{cmd_key}"] = True
                         
-                        st.success("✅ Command approved! Processing will continue...")
+                        if edited_command != pending_command['command']:
+                            st.success(f"✅ Modified command approved: `{edited_command}`")
+                        else:
+                            st.success("✅ Command approved! Processing will continue...")
                         st.rerun()  # Force immediate rerun to hide buttons
                 
                 with col2:
@@ -383,7 +406,12 @@ def main():
                         st.rerun()  # Force immediate rerun to hide buttons
                 
                 with col3:
-                    st.caption("⚠️ Only approve commands you understand and trust")
+                    st.caption("💡 **Tips:**")
+                    st.caption("• Edit the command if needed")
+                    st.caption("• Check the working directory")
+                    st.caption("• Only approve commands you trust")
+                    if edited_command != pending_command['command']:
+                        st.caption("🔄 Command has been modified")
             
             # Show processing status while waiting for approval
             st.info("⏳ Waiting for command approval...")
