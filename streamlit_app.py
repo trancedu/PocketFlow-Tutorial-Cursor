@@ -6,6 +6,7 @@ import queue
 import time
 import io
 import json
+import traceback
 from typing import Dict, Any, List
 from datetime import datetime
 
@@ -101,6 +102,7 @@ def run_agent_flow(shared_data, log_queue):
         logger = logging.getLogger('coding_agent')
         logger.error(f"❌ Error running flow: {str(e)}")
         shared_data["error"] = str(e)
+        shared_data["error_trace"] = traceback.format_exc()
 
 def main():
     st.set_page_config(
@@ -156,6 +158,7 @@ def main():
             st.session_state.logs = []
             st.session_state.response = None
             st.session_state.error = None
+            st.session_state.error_trace = None
             st.session_state.processing = False
             st.session_state.input_key_counter += 1  # Force new input widget
             st.rerun()
@@ -189,6 +192,8 @@ def main():
         st.session_state.response = None
     if 'error' not in st.session_state:
         st.session_state.error = None
+    if 'error_trace' not in st.session_state:
+        st.session_state.error_trace = None
     if 'conversation_history' not in st.session_state:
         st.session_state.conversation_history = []
     if 'current_query' not in st.session_state:
@@ -297,6 +302,7 @@ def main():
         st.session_state.logs = []
         st.session_state.response = None
         st.session_state.error = None
+        st.session_state.error_trace = None
         st.rerun()
     
     # Show processing interface if currently processing
@@ -450,12 +456,20 @@ def main():
                 time.sleep(2)
                 st.rerun()
             else:
-                st.success(f"✅ Processing complete!")
+                # Show success or error depending on worker result
+                if shared_data.get("error"):
+                    st.error(f"❌ Error: {shared_data.get('error')}")
+                    if shared_data.get("error_trace"):
+                        with st.expander("View error details", expanded=False):
+                            st.code(shared_data.get("error_trace"), language="text")
+                else:
+                    st.success(f"✅ Processing complete!")
                 
                 # Get final response
                 final_response = shared_data.get("response")
                 st.session_state.response = final_response
                 st.session_state.error = shared_data.get("error")
+                st.session_state.error_trace = shared_data.get("error_trace")
                 st.session_state.processing = False
                 
                 # Clean up processing state
@@ -493,6 +507,13 @@ def main():
             )
             
             st.code(log_text, language="text")
+
+    # Surface any error captured during the last run when idle
+    if st.session_state.get("error") and not st.session_state.processing:
+        st.error(f"❌ {st.session_state.get('error')}")
+        if st.session_state.get("error_trace"):
+            with st.expander("View error details", expanded=False):
+                st.code(st.session_state.get("error_trace"), language="text")
     
     # Footer
     st.markdown("---")
