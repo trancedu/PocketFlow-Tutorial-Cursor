@@ -1,47 +1,40 @@
 import os
 from typing import List, Dict, Any, Tuple
 
-def _build_tree_str(items: List[Dict[str, Any]], prefix: str = "", is_last: bool = True, show_all: bool = True) -> str:
+# Default maximum characters to return in the tree visualization
+DEFAULT_MAX_OUTPUT_CHARS = 2000
+
+def _build_tree_str(items: List[Dict[str, Any]], prefix: str = "") -> str:
     """
-    Helper function to build a tree-style string representation of the directory structure.
-    Only shows one level of directories and limits files shown per directory.
+    Build a tree-style string representation of the directory structure.
+    - Shows one level of recursion (root + each directory's children)
+    - Lists all files (no fixed count limit); overall output is capped later by char count
     """
     tree_str = ""
+
     # Split items into directories and files
     dirs = [item for item in items if item["type"] == "directory"]
     files = [item for item in items if item["type"] == "file"]
-    
-    # Process directories first
+
+    # Process directories first, then files
     for i, item in enumerate(dirs):
-        is_last_item = i == len(dirs) == 0 and len(files) == 0
-        connector = "└──" if is_last_item else "├──"
+        is_last_dir = (i == len(dirs) - 1) and (len(files) == 0)
+        connector = "└──" if is_last_dir else "├──"
         tree_str += f"{prefix}{connector} {item['name']}/\n"
-        
-        # For directories, just show count of contents
-        if "children" in item:
-            child_dirs = sum(1 for c in item["children"] if c["type"] == "directory")
-            child_files = sum(1 for c in item["children"] if c["type"] == "file")
-            next_prefix = prefix + ("    " if is_last_item else "│   ")
-            if child_dirs > 0 or child_files > 0:
-                summary = []
-                if child_dirs > 0:
-                    summary.append(f"{child_dirs} director{'y' if child_dirs == 1 else 'ies'}")
-                if child_files > 0:
-                    summary.append(f"{child_files} file{'s' if child_files != 1 else ''}")
-                tree_str += f"{next_prefix}└── [{', '.join(summary)}]\n"
-    
-    # Then process files
-    if files:
-        for i, item in enumerate(files[:10]):
-            is_last_item = i == len(files) - 1 if (len(files) <= 10 or i == 9) else False
-            connector = "└──" if is_last_item else "├──"
-            size_str = f" ({item['size'] / 1024:.1f} KB)" if item.get("size", 0) > 0 else ""
-            tree_str += f"{prefix}{connector} {item['name']}{size_str}\n"
-            
-        # If there are more than 10 files, show ellipsis
-        if len(files) > 10:
-            tree_str += f"{prefix}└── ... ({len(files) - 10} more files)\n"
-    
+
+        # Show children (one level deeper only, as provided by the recursive lister)
+        next_prefix = prefix + ("    " if is_last_dir else "│   ")
+        if "children" in item and item["children"]:
+            # Recursively render children of this directory
+            tree_str += _build_tree_str(item["children"], next_prefix)
+
+    # Then process files (list all files; truncation handled by outer cap)
+    for i, item in enumerate(files):
+        is_last_file = (i == len(files) - 1)
+        connector = "└──" if is_last_file else "├──"
+        size_str = f" ({item['size'] / 1024:.1f} KB)" if item.get("size", 0) > 0 else ""
+        tree_str += f"{prefix}{connector} {item['name']}{size_str}\n"
+
     return tree_str
 
 def list_dir(relative_workspace_path: str) -> Tuple[bool, str]:
@@ -96,6 +89,11 @@ def list_dir(relative_workspace_path: str) -> Tuple[bool, str]:
             
         items = _list_dir_recursive(path)
         tree_str = _build_tree_str(items)
+
+        # Apply a global character cap to keep output manageable
+        max_chars = int(os.environ.get("LIST_DIR_MAX_CHARS", DEFAULT_MAX_OUTPUT_CHARS))
+        if len(tree_str) > max_chars:
+            tree_str = tree_str[:max_chars].rstrip() + f"\n... (output truncated to first {max_chars} characters)\n"
         
         return True, tree_str
         
