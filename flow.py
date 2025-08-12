@@ -53,7 +53,19 @@ def format_history_summary(history: List[Dict[str, Any]]) -> str:
         if result:
             if isinstance(result, dict):
                 success = result.get("success", False)
-                history_str += f"- Result: {'Success' if success else 'Failed'}\n"
+                if success:
+                    history_str += f"- Result: Success\n"
+                else:
+                    # Show failure reason for run_command and other tools
+                    if action['tool'] == 'run_command':
+                        output = result.get("output", "Unknown error")
+                        # Extract the first line of error for brevity
+                        error_summary = output.split('\n')[0] if output else "Command failed"
+                        history_str += f"- Result: Failed - {error_summary}\n"
+                    else:
+                        # For other tools, try to get error message
+                        error_msg = result.get("message", result.get("error", "Unknown error"))
+                        history_str += f"- Result: Failed - {error_msg}\n"
                 
                 # Add tool-specific details
                 if action['tool'] == 'read_file' and success:
@@ -114,6 +126,20 @@ def format_history_summary(history: List[Dict[str, Any]]) -> str:
                         # Show first 300 chars of output
                         display_output = output[:300] + "..." if len(output) > 300 else output
                         history_str += f"- Output: {display_output}\n"
+                elif action['tool'] == 'run_command' and not success:
+                    # Handle failed commands clearly
+                    command = result.get("command", "Unknown command")
+                    output = result.get("output", "No error details")
+                    original_command = result.get("original_command")
+                    
+                    history_str += f"- ❌ COMMAND FAILED: {command}\n"
+                    if original_command:
+                        history_str += f"- Original Command: {original_command}\n"
+                    
+                    # Show error details with truncation for readability
+                    if output:
+                        display_output = output[:500] + "..." + output[-500:] if len(output) > 1000 else output
+                        history_str += f"- Error Details: {display_output}\n"
             else:
                 history_str += f"- Result: {result}\n"
         

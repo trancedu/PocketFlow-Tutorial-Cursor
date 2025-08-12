@@ -29,6 +29,8 @@ logger_root.addHandler(file_handler)
 logging.getLogger("anthropic").setLevel(logging.INFO)
 logging.getLogger("httpcore").setLevel(logging.INFO)
 logging.getLogger("httpx").setLevel(logging.INFO)
+# Ensure run_command logger shows all INFO and ERROR messages
+logging.getLogger("run_command").setLevel(logging.INFO)
 
 logger = logging.getLogger('main')
 

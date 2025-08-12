@@ -69,9 +69,11 @@ def run_command(command: str, working_dir: str = None, timeout: int = 30) -> Tup
         
         if result.returncode == 0:
             logger.info(f"Command executed successfully. Return code: {result.returncode}")
+            logger.info(f"Command output: {output}")
             return True, output or f"Command executed successfully (no output)"
         else:
-            logger.warning(f"Command failed with return code: {result.returncode}")
+            logger.error(f"Command failed with return code: {result.returncode}")
+            logger.error(f"Command output: {output}")
             return False, f"Command failed (exit code {result.returncode}):\n{output}"
             
     except subprocess.TimeoutExpired:

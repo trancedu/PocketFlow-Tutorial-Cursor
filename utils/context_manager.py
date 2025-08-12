@@ -165,7 +165,19 @@ class ContextManager:
         action_result = action.get("result")
         if action_result and isinstance(action_result, dict):
             success = action_result.get("success", False)
-            result.append(f"- Result: {'Success' if success else 'Failed'}")
+            if success:
+                result.append(f"- Result: Success")
+            else:
+                # Show failure reason for better debugging
+                if action['tool'] == 'run_command':
+                    output = action_result.get("output", "Unknown error")
+                    # Extract the first line of error for brevity
+                    error_summary = output.split('\n')[0] if output else "Command failed"
+                    result.append(f"- Result: Failed - {error_summary}")
+                else:
+                    # For other tools, try to get error message
+                    error_msg = action_result.get("message", action_result.get("error", "Unknown error"))
+                    result.append(f"- Result: Failed - {error_msg}")
             
             if action['tool'] == 'read_file' and success:
                 content_info = action_result.get("content_info", {})
@@ -221,6 +233,26 @@ class ContextManager:
                 reasoning = action_result.get("reasoning", "")
                 if reasoning and is_recent:
                     result.append(f"- Edit reasoning: {reasoning[:200]}...")
+            
+            elif action['tool'] == 'run_command' and not success:
+                # Handle failed commands clearly - show full error details
+                command = action_result.get("command", "Unknown command")
+                output = action_result.get("output", "No error details")
+                original_command = action_result.get("original_command")
+                
+                result.append(f"- ❌ COMMAND FAILED: {command}")
+                if original_command:
+                    result.append(f"- Original Command: {original_command}")
+                
+                # Show error details with appropriate truncation
+                if output:
+                    if is_recent:
+                        # Show more details for recent failures (up to 400 chars)
+                        display_output = output[:400] + "..." if len(output) > 400 else output
+                    else:
+                        # Show less for older failures (up to 150 chars)
+                        display_output = output[:150] + "..." if len(output) > 150 else output
+                    result.append(f"- Error Details: {display_output}")
             
             elif action['tool'] == 'list_dir' and success:
                 tree = action_result.get("tree_visualization", "")
