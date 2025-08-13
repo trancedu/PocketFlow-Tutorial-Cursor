@@ -2,7 +2,7 @@ import os
 from typing import List, Dict, Any, Tuple
 
 # Default maximum characters to return in the tree visualization
-DEFAULT_MAX_OUTPUT_CHARS = 2000
+DEFAULT_MAX_OUTPUT_CHARS = 4000
 
 def _build_tree_str(items: List[Dict[str, Any]], prefix: str = "") -> str:
     """
