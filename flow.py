@@ -172,20 +172,8 @@ Use "run_command" ONLY as a last resort when other tools cannot accomplish the t
         # Call LLM to decide action
         response = call_llm(prompt, caller="MainDecisionAgent.exec")
 
-        # Look for JSON structure in the response
-        json_content = ""
-        if "```json" in response:
-            json_blocks = response.split("```json")
-            if len(json_blocks) > 1:
-                json_content = json_blocks[1].split("```")[0].strip()
-        elif "```" in response:
-            # Try to extract from generic code block
-            json_blocks = response.split("```")
-            if len(json_blocks) > 1:
-                json_content = json_blocks[1].strip()
-        else:
-            # If no code blocks, try to use the entire response
-            json_content = response.strip()
+        # Extract JSON from response using more robust parsing
+        json_content = self._extract_json_from_response(response)
         
         if json_content:
             decision = json.loads(json_content)
@@ -204,6 +192,26 @@ Use "run_command" ONLY as a last resort when other tools cannot accomplish the t
             return decision
         else:
             raise ValueError("No JSON object found in response")
+    
+    def _extract_json_from_response(self, response: str) -> str:
+        """
+        Extract JSON from LLM response. The LLM typically wraps JSON in ```json blocks.
+        Use greedy matching to get the longest/last ``` to handle nested backticks.
+        """
+        import re
+        
+        # Use greedy matching (.*) instead of lazy (.*?) to match to the LAST ```
+        json_pattern = r'```json\s*(.*)\s*```'
+        match = re.search(json_pattern, response, re.DOTALL | re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+        
+        # Fallback: try to find any JSON-like structure
+        response_stripped = response.strip()
+        if response_stripped.startswith('{') and response_stripped.endswith('}'):
+            return response_stripped
+        
+        return ""
     
     def post(self, shared: Dict[str, Any], prep_res: Any, exec_res: Dict[str, Any]) -> str:
         logger.info(f"MainDecisionAgent: Selected tool: {exec_res['tool']}")
