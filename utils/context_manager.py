@@ -210,6 +210,21 @@ class ContextManager:
                 operations = action_result.get("operations", 0)
                 result.append(f"- Applied {operations} edit operations")
             
+            elif action['tool'] == 'edit_file' and not success:
+                # Handle failed edit operations clearly
+                reasoning = action_result.get("reasoning", "No details available")
+                operations = action_result.get("operations", 0)
+                
+                result.append(f"- ❌ EDIT FAILED: {operations} operations attempted")
+                # Show reasoning/error details
+                if reasoning:
+                    # Truncate very long reasoning for readability
+                    if is_recent:
+                        display_reasoning = reasoning[:300] + "..." if len(reasoning) > 300 else reasoning
+                    else:
+                        display_reasoning = reasoning[:150] + "..." if len(reasoning) > 150 else reasoning
+                    result.append(f"- Error Details: {display_reasoning}")
+            
             elif action['tool'] == 'run_command' and success:
                 command = action_result.get("command", "Unknown command")
                 original_command = action_result.get("original_command")

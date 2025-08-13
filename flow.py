@@ -613,7 +613,14 @@ Return a JSON object with your reasoning and an array of edit operations:
 }}
 ```
 
-IMPORTANT: Ensure proper JSON formatting with correct escaping of quotes and newlines. Use \\n for newlines and \\" for quotes within strings. Maintain proper indentation in the replacement code by including the appropriate spaces and tabs in the replacement string.
+CRITICAL JSON FORMATTING REQUIREMENTS:
+- Use \\n for newlines in the replacement string
+- Use \\" for quotes within the replacement string
+- Use \\t for tabs in the replacement string
+- ALL quotes inside string values MUST be escaped as \\"
+- Example: "replacement": "logger.info(\\"Starting process\\")\\nresult = process_data()"
+- If you have complex code with many quotes, be extra careful with escaping
+Maintain proper indentation in the replacement code by including the appropriate spaces and tabs in the replacement string.
 
 For lines that include "// ... existing code ...", do not include them in the replacement.
 Instead, identify the exact lines they represent in the original file and set the line 
