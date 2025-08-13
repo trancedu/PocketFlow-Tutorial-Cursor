@@ -143,11 +143,13 @@ Available tools:
        reason: The code requires the requests library but it's not installed
 
 7. finish: End the process and provide final response
-   - No parameters required
+   - Parameters: final_response (required) - The complete final response to the user
    - Example:
      tool: finish
      reason: I have completed the requested task of finding all logger instances
-     params: {{}}
+     params: {{
+       "final_response": "I found 3 logger instances in your codebase: one in main.py at line 15, one in utils/logging.py at line 8, and one in flow.py at line 28. All are properly configured."
+     }}
 
 Respond with a JSON object containing:
 ```json
@@ -162,7 +164,8 @@ Respond with a JSON object containing:
 
 IMPORTANT: Ensure proper JSON indentation in your response. When including code examples in the reason field, maintain correct indentation within the JSON string. Consider the previous conversation context when making decisions.
 
-If you believe no more actions are needed, use "finish" as the tool and explain why in the reason.
+If you believe no more actions are needed, use "finish" as the tool and explain why in the reason. For the finish tool, you MUST provide a comprehensive final_response parameter that summarizes what you accomplished, what was found or modified, and any next steps the user might want to take. This final_response should be written directly to the user as if you are speaking to them.
+
 Use "run_command" ONLY as a last resort when other tools cannot accomplish the task.
 """
         
@@ -191,11 +194,12 @@ Use "run_command" ONLY as a last resort when other tools cannot accomplish the t
             assert "tool" in decision, "Tool name is missing"
             assert "reason" in decision, "Reason is missing"
             
-            # For tools other than "finish", params must be present
-            if decision["tool"] != "finish":
-                assert "params" in decision, "Parameters are missing"
+            # Validate parameters based on tool type
+            if decision["tool"] == "finish":
+                assert "params" in decision, "Parameters are missing for finish tool"
+                assert "final_response" in decision["params"], "final_response parameter is required for finish tool"
             else:
-                decision["params"] = {}
+                assert "params" in decision, "Parameters are missing"
             
             return decision
         else:
@@ -496,10 +500,13 @@ class RunCommandAction(Node):
             }
         
         # If the command was successful and appears to be a long-running service (like streamlit run),
-        # go directly to format response instead of back to main agent
+        # For server/streamlit commands, generate a completion response
         command = prep_res.get("command", "")
         if success and ("streamlit run" in command.lower() or "serve" in command.lower() or "server" in command.lower()):
-            return "finish"
+            # Create a final response for the server startup
+            final_response = f"✅ Successfully executed: `{command}`\n\nThe server should now be running. You can access your application in your web browser at the URL shown in the output above."
+            shared["response"] = final_response
+            return "done"
         
         # For other commands, continue normal flow
         return ""
@@ -748,53 +755,44 @@ class ApplyChangesNode(BatchNode):
 
 
 #############################################
-# Format Response Node
+# Finish Action Node
 #############################################
-class FormatResponseNode(Node):
-    def prep(self, shared: Dict[str, Any]) -> List[Dict[str, Any]]:
-        # Get history
+class FinishAction(Node):
+    def prep(self, shared: Dict[str, Any]) -> str:
+        # Get the final_response from the last history entry
         history = shared.get("history", [])
-        
-        return history
-    
-    def exec(self, history: List[Dict[str, Any]]) -> str:
-        # If no history, return a generic message
         if not history:
-            return "No actions were performed."
+            raise ValueError("No history found")
         
-        # Generate a summary of actions using the context manager
-        # Use a generic query since we want a complete summary for response generation
-        actions_summary = context_manager.get_contextual_history(history, "generate final response")
+        last_action = history[-1]
+        final_response = last_action["params"].get("final_response")
         
-        # Prompt for the LLM to generate the final response
-        prompt = f"""
-You are a coding assistant. You have just performed a series of actions based on the 
-user's request. Summarize what you did in a clear, helpful response.
-
-Here are the actions you performed:
-{actions_summary}
-
-Generate a comprehensive yet concise response that explains:
-1. What actions were taken
-2. What was found or modified
-3. Any next steps the user might want to take
-
-IMPORTANT: 
-- Focus on the outcomes and results, not the specific tools used
-- Write as if you are directly speaking to the user
-- When providing code examples or structured information, use JSON format enclosed in triple backticks with proper indentation and escaping
-"""
+        if not final_response:
+            raise ValueError("Missing final_response parameter")
         
-        # Call LLM to generate response
-        response = call_llm(prompt, caller="FormatResponseNode.exec")
+        # Use the reason for logging
+        reason = last_action.get("reason", "No reason provided")
+        logger.info(f"FinishAction: {reason}")
         
-        return response
+        return final_response
     
-    def post(self, shared: Dict[str, Any], prep_res: List[Dict[str, Any]], exec_res: str) -> str:
-        logger.info(f"###### Final Response Generated ######\n{exec_res}\n###### End of Response ######")
+    def exec(self, final_response: str) -> str:
+        # Simply return the final response as provided
+        return final_response
+    
+    def post(self, shared: Dict[str, Any], prep_res: str, exec_res: str) -> str:
+        logger.info(f"###### Final Response ######\n{exec_res}\n###### End of Response ######")
         
         # Store response in shared
         shared["response"] = exec_res
+        
+        # Update the result in the last history entry
+        history = shared.get("history", [])
+        if history:
+            history[-1]["result"] = {
+                "success": True,
+                "message": "Task completed successfully"
+            }
         
         return "done"
 
@@ -826,7 +824,7 @@ def create_main_flow() -> Flow:
     delete_action = DeleteFileAction()
     run_command_action = RunCommandAction()
     edit_agent = create_edit_agent()
-    format_response = FormatResponseNode()
+    finish_action = FinishAction()
     
     # Connect main agent to action nodes
     main_agent - "read_file" >> read_action
@@ -835,7 +833,7 @@ def create_main_flow() -> Flow:
     main_agent - "delete_file" >> delete_action
     main_agent - "run_command" >> run_command_action
     main_agent - "edit_file" >> edit_agent
-    main_agent - "finish" >> format_response
+    main_agent - "finish" >> finish_action
     
     # Connect action nodes back to main agent using default action
     read_action >> main_agent
@@ -843,7 +841,7 @@ def create_main_flow() -> Flow:
     list_dir_action >> main_agent
     delete_action >> main_agent
     run_command_action >> main_agent
-    run_command_action - "finish" >> format_response
+    # run_command_action handles server commands directly with "done" return
     edit_agent >> main_agent
     
     # Create flow
