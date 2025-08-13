@@ -9,28 +9,44 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-# Configure logging
-log_directory = os.getenv("LOG_DIR", "logs")
-os.makedirs(log_directory, exist_ok=True)
-# Use per-run timestamped file (to seconds) instead of per-day
-log_file = os.path.join(log_directory, f"llm_calls_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+# Global logger variable and initialization flag
+logger = None
+_logger_initialized = False
 
-# Set up logger
-logger = logging.getLogger("llm_logger")
-logger.setLevel(logging.DEBUG)  # Allow all levels
-logger.propagate = False  # Prevent propagation to root logger to avoid duplicates
-
-# Console handler - show INFO and above
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
-console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
-logger.addHandler(console_handler)
-
-# File handler - save DEBUG and above
-file_handler = logging.FileHandler(log_file)
-file_handler.setLevel(logging.DEBUG)
-file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
-logger.addHandler(file_handler)
+def _ensure_logger_initialized():
+    """Initialize logger only when first needed (lazy initialization)."""
+    global logger, _logger_initialized
+    
+    if _logger_initialized:
+        return
+    
+    # Configure logging directory
+    log_directory = os.getenv("LOG_DIR", "logs")
+    os.makedirs(log_directory, exist_ok=True)
+    
+    # Use per-run timestamped file (to seconds) - only when actually needed
+    log_file = os.path.join(log_directory, f"llm_calls_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+    
+    # Set up logger
+    logger = logging.getLogger("llm_logger")
+    logger.setLevel(logging.DEBUG)  # Allow all levels
+    logger.propagate = False  # Prevent propagation to root logger to avoid duplicates
+    
+    # Only add handlers if they don't already exist
+    if not logger.handlers:
+        # Console handler - show INFO and above
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.INFO)
+        console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+        logger.addHandler(console_handler)
+        
+        # File handler - save DEBUG and above
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+        logger.addHandler(file_handler)
+    
+    _logger_initialized = True
 
 # Simple cache configuration
 cache_file = "llm_cache.json"
@@ -43,6 +59,9 @@ def call_llm(
     caller: Optional[str] = None,
 ) -> str:
     """Call the LLM and log prompt/response with optional caller context."""
+    # Ensure logger is initialized before use
+    _ensure_logger_initialized()
+    
     caller_tag = caller or "unknown"
     # Log the prompt with caller context
     logger.debug(f"PROMPT [{caller_tag}]: {prompt}")
@@ -116,6 +135,9 @@ def call_llm(
 
 def clear_cache() -> None:
     """Clear the cache file if it exists."""
+    # Ensure logger is initialized before use
+    _ensure_logger_initialized()
+    
     if os.path.exists(cache_file):
         os.remove(cache_file)
         logger.info("Cache cleared")
