@@ -9,14 +9,24 @@ from datetime import datetime
 
 
 class ContextManager:
-    def __init__(self, max_context_chars: int = 400000):
+    # ===== CONFIGURABLE THRESHOLDS =====
+    # Adjust these values to control content display behavior
+    DEFAULT_MAX_CONTEXT_CHARS = 400000      # Total context limit (400k chars)
+    FILE_CONTENT_BUDGET = 100000             # Max chars for individual file content
+    GREP_MATCHES_BUDGET = 5000              # Max chars for grep search results
+    COMMAND_OUTPUT_BUDGET = 3000            # Max chars for command output
+    CONTENT_PREVIEW_LENGTH = 3000           # Length of truncated previews
+    MAX_GREP_MATCHES_SHOWN = 10             # Max number of grep matches to show
+    RECENT_ACTIONS_COUNT = 7                # Number of actions considered "recent"
+    
+    def __init__(self, max_context_chars: int = None):
         """
         Initialize context manager.
         
         Args:
-            max_context_chars: Maximum characters to include in context (default: 400k chars)
+            max_context_chars: Maximum characters to include in context (uses DEFAULT_MAX_CONTEXT_CHARS if None)
         """
-        self.max_context_chars = max_context_chars
+        self.max_context_chars = max_context_chars or self.DEFAULT_MAX_CONTEXT_CHARS
         self.file_cache = {}  # file_path -> {hash, content, first_seen}
         self.content_hashes = {}  # hash -> file_path
         
@@ -100,15 +110,21 @@ class ContextManager:
         # Reserve 10% of chars for current query context
         available_chars = int(self.max_context_chars * 0.9)
         
-        # Calculate total file content size to determine budget
-        total_file_content_chars = self._calculate_total_file_content_chars(full_history)
-        file_content_budget = min(10000, available_chars // 3)  # Max 10k or 1/3 of available chars
+        # Calculate content budgets based on configurable thresholds
+        file_content_budget = min(self.FILE_CONTENT_BUDGET, available_chars // 4)
+        grep_matches_budget = min(self.GREP_MATCHES_BUDGET, available_chars // 8)  
+        command_output_budget = min(self.COMMAND_OUTPUT_BUDGET, available_chars // 8)
         
-        # Priority 1: Recent actions (last 5 for larger context window)
-        recent_actions = full_history[-5:] if len(full_history) >= 5 else full_history
+        # Priority 1: Recent actions (configurable count)
+        recent_actions = full_history[-self.RECENT_ACTIONS_COUNT:] if len(full_history) >= self.RECENT_ACTIONS_COUNT else full_history
         
         for i, action in enumerate(recent_actions, 1):
-            action_summary = self._format_action_for_context(action, is_recent=True, file_content_budget=file_content_budget)
+            action_summary = self._format_action_for_context(
+                action, is_recent=True, 
+                file_content_budget=file_content_budget,
+                grep_matches_budget=grep_matches_budget,
+                command_output_budget=command_output_budget
+            )
             action_chars = len(action_summary)
             
             if total_chars + action_chars <= available_chars:
@@ -136,7 +152,10 @@ class ContextManager:
         if remaining_chars > 5000:  # Only if significant space remains
             older_actions = full_history[:-5] if len(full_history) > 5 else []
             if older_actions:
-                relevant_older = self._get_relevant_older_actions(older_actions, current_query, remaining_chars, file_content_budget)
+                relevant_older = self._get_relevant_older_actions(
+                    older_actions, current_query, remaining_chars, 
+                    file_content_budget, grep_matches_budget, command_output_budget
+                )
                 for action_summary in relevant_older:
                     action_chars = len(action_summary)
                     if total_chars + action_chars <= available_chars:
@@ -166,15 +185,24 @@ class ContextManager:
                         total_chars += len(content)
         return total_chars
     
-    def _format_action_for_context(self, action: Dict[str, Any], is_recent: bool = False, file_content_budget: int = 10000) -> str:
+    def _format_action_for_context(self, action: Dict[str, Any], is_recent: bool = False, 
+                                 file_content_budget: int = None, 
+                                 grep_matches_budget: int = None,
+                                 command_output_budget: int = None) -> str:
         """
-        Format a single action for contextual display with smart file content management.
+        Format a single action for contextual display with smart content management.
         
         Args:
             action: The action to format
             is_recent: Whether this is a recent action (affects some display choices)
             file_content_budget: Max characters to show for individual file content
+            grep_matches_budget: Max characters to show for grep results
+            command_output_budget: Max characters to show for command output
         """
+        # Use class defaults if not provided
+        file_content_budget = file_content_budget or self.FILE_CONTENT_BUDGET
+        grep_matches_budget = grep_matches_budget or self.GREP_MATCHES_BUDGET
+        command_output_budget = command_output_budget or self.COMMAND_OUTPUT_BUDGET
         result = []
         result.append(f"- Tool: {action['tool']}")
         result.append(f"- Reason: {action['reason']}")
@@ -218,7 +246,7 @@ class ContextManager:
                         result.append(f"- Content: {content}")
                     else:
                         # Content exceeds individual budget - show truncated version
-                        result.append(f"- Content: {content[:1000]}... [truncated, {content_info['lines']} total lines]")
+                        result.append(f"- Content: {content[:self.CONTENT_PREVIEW_LENGTH]}... [truncated, {content_info['lines']} total lines]")
                         result.append(f"- Note: Full content available in cache ({len(content)} chars)")
                 else:
                     # Fallback - show summary
@@ -227,12 +255,22 @@ class ContextManager:
             elif action['tool'] == 'grep_search' and success:
                 matches = action_result.get("matches", [])
                 result.append(f"- Found {len(matches)} matches")
-                if is_recent and matches:
-                    # Show first few matches for recent searches
-                    for i, match in enumerate(matches[:3]):
-                        result.append(f"  {i+1}. {match.get('file')}:{match.get('line')}: {match.get('content')}")
-                    if len(matches) > 3:
-                        result.append(f"  ... and {len(matches) - 3} more matches")
+                if matches:
+                    # Smart matches display based on budget, not recency
+                    matches_text = ""
+                    matches_shown = 0
+                    for i, match in enumerate(matches):
+                        match_line = f"  {i+1}. {match.get('file')}:{match.get('line')}: {match.get('content')}\n"
+                        if len(matches_text + match_line) <= grep_matches_budget and matches_shown < self.MAX_GREP_MATCHES_SHOWN:
+                            matches_text += match_line
+                            matches_shown += 1
+                        else:
+                            break
+                    
+                    if matches_text:
+                        result.append(matches_text.rstrip())
+                        if matches_shown < len(matches):
+                            result.append(f"  ... and {len(matches) - matches_shown} more matches [budget: {grep_matches_budget} chars]")
             
             elif action['tool'] == 'edit_file' and success:
                 operations = action_result.get("operations", 0)
@@ -269,9 +307,13 @@ class ContextManager:
                 
                 output = action_result.get("output", "")
                 if output:
-                    # Show first 200 chars of output for context
-                    display_output = output[:200] + "..." if len(output) > 200 else output
-                    result.append(f"- Output: {display_output}")
+                    # Smart output display based on budget, not fixed 200 chars
+                    if len(output) <= command_output_budget:
+                        result.append(f"- Output: {output}")
+                    else:
+                        display_output = output[:self.CONTENT_PREVIEW_LENGTH] + "..."
+                        result.append(f"- Output: {display_output}")
+                        result.append(f"- Note: Full output available ({len(output)} chars, budget: {command_output_budget})")
                 
                 reasoning = action_result.get("reasoning", "")
                 if reasoning and is_recent:
@@ -287,15 +329,14 @@ class ContextManager:
                 if original_command:
                     result.append(f"- Original Command: {original_command}")
                 
-                # Show error details with appropriate truncation
+                # Smart error output display based on budget
                 if output:
-                    if is_recent:
-                        # Show more details for recent failures (up to 400 chars)
-                        display_output = output[:400] + "..." if len(output) > 400 else output
+                    if len(output) <= command_output_budget:
+                        result.append(f"- Error Details: {output}")
                     else:
-                        # Show less for older failures (up to 150 chars)
-                        display_output = output[:150] + "..." if len(output) > 150 else output
-                    result.append(f"- Error Details: {display_output}")
+                        display_output = output[:self.CONTENT_PREVIEW_LENGTH] + "..."
+                        result.append(f"- Error Details: {display_output}")
+                        result.append(f"- Note: Full error output available ({len(output)} chars)")
             
             elif action['tool'] == 'list_dir' and success:
                 tree = action_result.get("tree_visualization", "")
@@ -317,7 +358,10 @@ class ContextManager:
         return '\n'.join(summary)
     
     def _get_relevant_older_actions(self, older_actions: List[Dict[str, Any]], 
-                                  current_query: str, char_budget: int, file_content_budget: int = 10000) -> List[str]:
+                                  current_query: str, char_budget: int, 
+                                  file_content_budget: int = None,
+                                  grep_matches_budget: int = None,
+                                  command_output_budget: int = None) -> List[str]:
         """Get relevant older actions based on current query with character budget."""
         # Simple relevance scoring - could be enhanced with embeddings
         relevant = []
@@ -340,7 +384,12 @@ class ContextManager:
         
         # Add actions within character budget
         for score, action in scored_actions:
-            action_summary = self._format_action_for_context(action, is_recent=False, file_content_budget=file_content_budget)
+            action_summary = self._format_action_for_context(
+                action, is_recent=False, 
+                file_content_budget=file_content_budget,
+                grep_matches_budget=grep_matches_budget,
+                command_output_budget=command_output_budget
+            )
             action_chars = len(action_summary)
             
             if used_chars + action_chars <= char_budget:
