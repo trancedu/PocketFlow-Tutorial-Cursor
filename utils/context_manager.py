@@ -81,6 +81,7 @@ class ContextManager:
                              current_query: str) -> str:
         """
         Generate smart contextual history for AI with 400k character limit.
+        Uses budget-based approach for file content instead of arbitrary recency rules.
         
         Args:
             full_history: Complete conversation history
@@ -99,11 +100,15 @@ class ContextManager:
         # Reserve 10% of chars for current query context
         available_chars = int(self.max_context_chars * 0.9)
         
+        # Calculate total file content size to determine budget
+        total_file_content_chars = self._calculate_total_file_content_chars(full_history)
+        file_content_budget = min(10000, available_chars // 3)  # Max 10k or 1/3 of available chars
+        
         # Priority 1: Recent actions (last 5 for larger context window)
         recent_actions = full_history[-5:] if len(full_history) >= 5 else full_history
         
         for i, action in enumerate(recent_actions, 1):
-            action_summary = self._format_action_for_context(action, is_recent=True)
+            action_summary = self._format_action_for_context(action, is_recent=True, file_content_budget=file_content_budget)
             action_chars = len(action_summary)
             
             if total_chars + action_chars <= available_chars:
@@ -131,7 +136,7 @@ class ContextManager:
         if remaining_chars > 5000:  # Only if significant space remains
             older_actions = full_history[:-5] if len(full_history) > 5 else []
             if older_actions:
-                relevant_older = self._get_relevant_older_actions(older_actions, current_query, remaining_chars)
+                relevant_older = self._get_relevant_older_actions(older_actions, current_query, remaining_chars, file_content_budget)
                 for action_summary in relevant_older:
                     action_chars = len(action_summary)
                     if total_chars + action_chars <= available_chars:
@@ -148,8 +153,28 @@ class ContextManager:
             
         return final_context
     
-    def _format_action_for_context(self, action: Dict[str, Any], is_recent: bool = False) -> str:
-        """Format a single action for contextual display."""
+    def _calculate_total_file_content_chars(self, history: List[Dict[str, Any]]) -> int:
+        """Calculate total characters in all file content across history."""
+        total_chars = 0
+        for action in history:
+            if action.get('tool') == 'read_file':
+                result = action.get('result', {})
+                if result.get('success'):
+                    content_info = result.get('content_info', {})
+                    if content_info.get('type') == 'file_content':
+                        content = content_info.get('content', '')
+                        total_chars += len(content)
+        return total_chars
+    
+    def _format_action_for_context(self, action: Dict[str, Any], is_recent: bool = False, file_content_budget: int = 10000) -> str:
+        """
+        Format a single action for contextual display with smart file content management.
+        
+        Args:
+            action: The action to format
+            is_recent: Whether this is a recent action (affects some display choices)
+            file_content_budget: Max characters to show for individual file content
+        """
         result = []
         result.append(f"- Tool: {action['tool']}")
         result.append(f"- Reason: {action['reason']}")
@@ -185,15 +210,18 @@ class ContextManager:
                     # Show reference instead of full content
                     result.append(f"- File: {content_info['file_path']} ({content_info['lines']} lines)")
                     result.append(f"- Content: [Duplicate of {content_info['duplicate_of']}]")
-                elif is_recent and content_info.get("type") == "file_content":
-                    # Show content for recent actions
+                elif content_info.get("type") == "file_content":
+                    # Smart content display based on budget, not recency
                     content = content_info.get("content", "")
-                    if len(content) > 1000:  # Truncate very large content
-                        result.append(f"- Content: {content[:1000]}... [truncated, {content_info['lines']} total lines]")
-                    else:
+                    if len(content) <= file_content_budget:
+                        # Content fits within budget - show it all
                         result.append(f"- Content: {content}")
+                    else:
+                        # Content exceeds individual budget - show truncated version
+                        result.append(f"- Content: {content[:1000]}... [truncated, {content_info['lines']} total lines]")
+                        result.append(f"- Note: Full content available in cache ({len(content)} chars)")
                 else:
-                    # Older actions - just show summary
+                    # Fallback - show summary
                     result.append(f"- File: {content_info.get('file_path', 'unknown')} ({content_info.get('lines', 0)} lines)")
             
             elif action['tool'] == 'grep_search' and success:
@@ -289,7 +317,7 @@ class ContextManager:
         return '\n'.join(summary)
     
     def _get_relevant_older_actions(self, older_actions: List[Dict[str, Any]], 
-                                  current_query: str, char_budget: int) -> List[str]:
+                                  current_query: str, char_budget: int, file_content_budget: int = 10000) -> List[str]:
         """Get relevant older actions based on current query with character budget."""
         # Simple relevance scoring - could be enhanced with embeddings
         relevant = []
@@ -312,7 +340,7 @@ class ContextManager:
         
         # Add actions within character budget
         for score, action in scored_actions:
-            action_summary = self._format_action_for_context(action, is_recent=False)
+            action_summary = self._format_action_for_context(action, is_recent=False, file_content_budget=file_content_budget)
             action_chars = len(action_summary)
             
             if used_chars + action_chars <= char_budget:
