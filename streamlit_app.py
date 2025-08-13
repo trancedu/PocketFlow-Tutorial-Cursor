@@ -459,33 +459,37 @@ def main():
                 # Show success or error depending on worker result
                 if shared_data.get("error"):
                     st.error(f"❌ Error: {shared_data.get('error')}")
-                    if shared_data.get("error_trace"):
-                        with st.expander("View error details", expanded=False):
-                            st.code(shared_data.get("error_trace"), language="text")
                 else:
                     st.success(f"✅ Processing complete!")
-                
-                # Get final response
-                final_response = shared_data.get("response")
-                st.session_state.response = final_response
-                st.session_state.error = shared_data.get("error")
-                st.session_state.error_trace = shared_data.get("error_trace")
-                st.session_state.processing = False
-                
-                # Clean up processing state
-                del st.session_state.processing_thread
-                del st.session_state.shared_data
-                del st.session_state.log_queue
-                del st.session_state.processing_start_time
-                
-                # Add to conversation history if we got a response
-                if final_response:
-                    st.session_state.conversation_history.append({
-                        "user_query": st.session_state.current_query,
-                        "response": final_response,
-                        "timestamp": datetime.now().isoformat(),
-                        "actions_taken": len(shared_data.get("history", []))
-                    })
+        
+        # Show error details outside the logs expander to avoid nesting
+        if not agent_thread.is_alive() and shared_data.get("error_trace"):
+            with st.expander("View error details", expanded=False):
+                st.code(shared_data.get("error_trace"), language="text")
+        
+        # Process completion when thread is done
+        if not agent_thread.is_alive():
+            # Get final response
+            final_response = shared_data.get("response")
+            st.session_state.response = final_response
+            st.session_state.error = shared_data.get("error")
+            st.session_state.error_trace = shared_data.get("error_trace")
+            st.session_state.processing = False
+            
+            # Clean up processing state
+            del st.session_state.processing_thread
+            del st.session_state.shared_data
+            del st.session_state.log_queue
+            del st.session_state.processing_start_time
+            
+            # Add to conversation history if we got a response
+            if final_response:
+                st.session_state.conversation_history.append({
+                    "user_query": st.session_state.current_query,
+                    "response": final_response,
+                    "timestamp": datetime.now().isoformat(),
+                    "actions_taken": len(shared_data.get("history", []))
+                })
                 
                 # Clear the current query and increment input counter
                 st.session_state.current_query = ""
